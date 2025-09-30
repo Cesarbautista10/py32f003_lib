@@ -1,0 +1,955 @@
+#include "main.h"
+#include <stdlib.h>
+#include "neo_spi.h"
+
+#define DARA_LENGTH       1
+#define I2C_ADDRESS        (0x51 << 1)  
+#define I2C_SPEEDCLOCK    400000
+#define I2C_DUTYCYCLE     I2C_DUTYCYCLE_2
+#define I2C_TIMEOUT       1000
+#define MAX_I2C_ERRORS    10
+
+// Direcciones UID para PY32F0xx
+#define UID_BASE_ADDRESS   0x1FFF0E00UL   // Dirección base del UID principal
+#define UID_ALT_ADDRESS    0x1FFF0C00UL   // Dirección alternativa
+#define UID_SIZE           12             // 12 bytes (96 bits)
+
+// Rango de direcciones I2C dinámicas (7-bit addressing)
+#define I2C_ADDR_MIN       0x08         // Dirección mínima (evitar direcciones reservadas)
+#define I2C_ADDR_MAX       0x77         // Dirección máxima (evitar direcciones reservadas)
+
+// ═══════════════════════════════════════════════════════════
+//            📍 CONFIGURACIÓN FINAL firmware_v4_1
+// ═══════════════════════════════════════════════════════════
+// PB6 SCL      - I2C Clock Line
+// PA10 SDA     - I2C Data Line  
+// PA0 ADC      - Entrada analógica
+// PA1 NEOPIXEL - NeoPixels (ya configurado)
+// PB5 PWM      - Timer control PWM
+// PB0 DIGITAL  - Entrada digital
+
+// Comandos I2C principales
+#define CMD_RELAY_OFF      0x00         // Comando: Apagar RELÉ PA2
+#define CMD_RELAY_ON       0x01         // Comando: Encender RELÉ PA2
+#define CMD_RED            0x02         // NeoPixels rojos
+#define CMD_GREEN          0x03         // NeoPixels verdes
+#define CMD_BLUE           0x04         // NeoPixels azules
+#define CMD_OFF            0x05         // NeoPixels apagados
+
+// Comandos para sensores
+#define CMD_PA4_DIGITAL    0x07         // Leer PB0 entrada digital (compatible con maestro)
+#define CMD_PA0_ADC        0x08         // Leer PA0 entrada analógica
+
+// Comandos PWM para PB5
+#define CMD_PWM_MIN        0x10         // PWM rango mínimo
+#define CMD_PWM_MAX        0x1F         // PWM rango máximo
+#define CMD_PWM_OFF        0x20         // PWM OFF
+#define CMD_PWM_25         0x21         // PWM 25% - 200Hz
+#define CMD_PWM_50         0x22         // PWM 50% - 500Hz
+#define CMD_PWM_75         0x23         // PWM 75% - 1000Hz
+#define CMD_PWM_100        0x24         // PWM 100% - 2000Hz
+
+// Comandos tonos musicales
+#define CMD_TONE_DO        0x25         // DO (261Hz)
+#define CMD_TONE_RE        0x26         // RE (294Hz)
+#define CMD_TONE_MI        0x27         // MI (330Hz)
+#define CMD_TONE_FA        0x28         // FA (349Hz)
+#define CMD_TONE_SOL       0x29         // SOL (392Hz)
+#define CMD_TONE_LA        0x2A         // LA (440Hz)
+#define CMD_TONE_SI        0x2B         // SI (494Hz)
+
+// Comandos alertas sistema
+#define CMD_SUCCESS        0x2C         // Éxito - 800Hz
+#define CMD_OK             0x2D         // OK - 1000Hz
+#define CMD_WARNING        0x2E         // Warning - 1200Hz
+#define CMD_ALERT          0x2F         // Alert - 1500Hz
+
+// ═══════════════════════════════════════════════════════════
+//                      COMANDOS ADC PA0 (12-bit)
+// ═══════════════════════════════════════════════════════════
+#define CMD_ADC_PA0_HSB    0xD8         // Leer ADC PA0 - HSB (bits 11-8)
+#define CMD_ADC_PA0_LSB    0xD9         // Leer ADC PA0 - LSB (bits 7-0)
+#define CMD_ADC_PA0_I2C    0xDA         // Leer ADC PA0 escalado a dirección I2C (7-bit)
+
+// Códigos respuesta
+#define RESP_RELAY_OFF     0x00
+#define RESP_RELAY_ON      0x01
+#define RESP_NEO_RED       0x02
+#define RESP_NEO_GREEN     0x03
+#define RESP_NEO_BLUE      0x04
+#define RESP_NEO_OFF       0x05
+#define RESP_PWM_SET       0x06
+#define RESP_PWM_OFF       0x07
+#define RESP_I2C_ERROR     0x08
+#define RESP_PB0_DIGITAL   0x09
+#define RESP_PA0_ADC       0x0A
+#define RESP_CMD_UNKNOWN   0x0B
+#define RESP_TONE_SET      0x0C
+#define RESP_SUCCESS       0x0D
+#define RESP_OK            0x0E
+#define RESP_WARNING       0x0F
+
+// ⭐ CÓDIGOS DE RESPUESTA ADC PA0
+#define RESP_ADC_HSB       0x0D         // ADC HSB enviado (bits 11-8)
+#define RESP_ADC_LSB       0x0E         // ADC LSB enviado (bits 7-0)
+#define RESP_ADC_I2C       0x0F         // ADC escalado a dirección I2C enviado
+
+I2C_HandleTypeDef I2cHandle;
+uint8_t aTxBuffer[1] = {0};
+uint8_t aRxBuffer[1] = {0};
+
+// Variables para PB0 digital
+uint8_t pb0_digital_state = 0;
+uint32_t pb0_last_read = 0;
+uint8_t pb0_initialized = 0;
+
+// Variables para PA0 ADC
+uint16_t pa0_adc_value = 0;
+uint32_t pa0_last_read = 0;
+uint8_t pa0_adc_initialized = 0;
+
+// Prototipos de funciones
+static void APP_SystemClockConfig(void);
+static void Init_I2C_Pins(void);           // PB6 SCL + PA10 SDA
+static void Init_PA2_Relay(void);          // PA2 Salida relé
+static void Init_PWM_PB5(void);            // PB5 Timer PWM TIM3_CH2 AF1
+static void Init_PB0_Digital(void);        // PB0 Entrada digital
+static void Init_PA0_ADC(void);            // PA0 Entrada analógica
+static void Read_PB0_Digital(void);
+static uint16_t Read_PA0_ADC(void);
+static uint8_t Scale_ADC_To_I2C_Address(uint16_t adc_value);  // ⭐ FUNCIÓN ESCALAR ADC A DIRECCIÓN I2C
+static void Set_PWM_Frequency(uint16_t frequency_hz);
+static uint8_t Build_Response_With_PB0(uint8_t base_response);
+static void I2C_Recovery(void);
+
+// Funciones para dirección I2C dinámica
+static uint32_t Get_Device_UID(void);
+static uint8_t Calculate_I2C_Address(uint32_t uid);
+static uint8_t Calculate_I2C_Address_Internal(uint32_t uid);
+
+// ═══════════════════════════════════════════════════════════
+//            📍 CONFIGURACIÓN I2C: PB6 SCL + PA10 SDA
+// ═══════════════════════════════════════════════════════════
+static void Init_I2C_Pins(void)
+{
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+  
+  // Habilitar relojes
+  __HAL_RCC_GPIOA_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
+  __HAL_RCC_I2C_CLK_ENABLE();
+
+  // Configurar PB6 como SCL (I2C_SCL) 
+  GPIO_InitStruct.Pin = GPIO_PIN_6;
+  GPIO_InitStruct.Mode = GPIO_MODE_AF_OD;          // Open Drain
+  GPIO_InitStruct.Pull = GPIO_PULLUP;              // Pull-up interno
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+  GPIO_InitStruct.Alternate = GPIO_AF6_I2C;        // AF6 para I2C
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  // Configurar PA10 como SDA (I2C_SDA)
+  GPIO_InitStruct.Pin = GPIO_PIN_10;
+  GPIO_InitStruct.Mode = GPIO_MODE_AF_OD;          // Open Drain
+  GPIO_InitStruct.Pull = GPIO_PULLUP;              // Pull-up interno
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+  GPIO_InitStruct.Alternate = GPIO_AF6_I2C;       // AF6 para I2C
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+}
+
+// ═══════════════════════════════════════════════════════════
+//            📍 CONFIGURACIÓN RELÉ: PA2 Salida Digital
+// ═══════════════════════════════════════════════════════════
+static void Init_PA2_Relay(void)
+{
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+  
+  // Habilitar reloj GPIOA
+  __HAL_RCC_GPIOA_CLK_ENABLE();
+  
+  // Configurar PA2 como salida digital (RELÉ)
+  GPIO_InitStruct.Pin = GPIO_PIN_2;              // PA2 - Control RELÉ
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;    // Push-Pull Output
+  GPIO_InitStruct.Pull = GPIO_NOPULL;            // Sin pull-up/down
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;   // Velocidad baja para relé
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  
+  // Inicializar RELÉ apagado
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_RESET);
+}
+
+// ═══════════════════════════════════════════════════════════
+//            📍 CONFIGURACIÓN PWM: PB5 Timer Control TIM3_CH2 AF1
+// ═══════════════════════════════════════════════════════════
+static void Init_PWM_PB5(void)
+{
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+  
+  // Habilitar relojes
+  __HAL_RCC_GPIOB_CLK_ENABLE();
+  __HAL_RCC_TIM3_CLK_ENABLE();
+  
+  // Configurar PB5 como función alternativa para TIM3_CH2 (PWM)
+  // PB5 es la conexión estándar para TIM3_CH2 en PY32F003
+  GPIO_InitStruct.Pin = GPIO_PIN_5;
+  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;        // Push-Pull Alternate Function
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+  GPIO_InitStruct.Alternate = (uint8_t)0x01;     // AF1 para TIM3
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+  
+  // Configuración básica del timer TIM3 usando registros directos
+  // Prescaler: 24-1 = 23 (divide por 24)
+  // ARR: 1000-1 = 999 (período de 1000 cuentas)
+  // Frecuencia = 24MHz / (24 * 1000) = 1kHz - IDEAL PARA BUZZER
+  TIM3->PSC = 24 - 1;     // Prescaler 24 para 1kHz audible
+  TIM3->ARR = 1000 - 1;   // Período de 1000 para resolución fina
+  
+  // Configurar canal 2 para PWM mode 1 (regresando a canal 2 original)
+  // CC2S = 00 (canal configurado como salida)
+  // OC2M = 110 (PWM mode 1)
+  // OC2PE = 1 (preload habilitado)
+  TIM3->CCMR1 &= ~(3U << 8);                    // CC2S = 00 (canal 2 como salida)
+  TIM3->CCMR1 |= (6U << 12);                    // OC2M = 110 (PWM mode 1)
+  TIM3->CCMR1 |= (1U << 11);                    // OC2PE = 1 (preload enable)
+  
+  // Configurar polaridad del canal 2 (activo alto)
+  TIM3->CCER &= ~(1U << 5);                     // CC2P = 0 (polaridad activa alta)
+  
+  // Habilitar la salida del canal 2
+  TIM3->CCER |= (1U << 4);                      // CC2E = 1 (habilitar salida canal 2)
+  
+  // Valor inicial del duty cycle (50% - PWM audible al inicio para prueba)
+  TIM3->CCR2 = 500;  // 50% del ARR (1000) para un tono audible
+  
+  // Habilitar auto-reload preload
+  TIM3->CR1 |= TIM_CR1_ARPE;
+  
+  // Iniciar el timer
+  TIM3->CR1 |= TIM_CR1_CEN;                     // Counter enable
+}
+
+// ═══════════════════════════════════════════════════════════
+//            📍 CONFIGURACIÓN PA0: Entrada Analógica ADC
+// ═══════════════════════════════════════════════════════════
+static void Init_PA0_ADC(void)
+{
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+  
+  // Habilitar relojes
+  __HAL_RCC_GPIOA_CLK_ENABLE();
+  __HAL_RCC_ADC_CLK_ENABLE();
+  
+  // Configurar PA0 como entrada analógica
+  GPIO_InitStruct.Pin = GPIO_PIN_0;
+  GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;         // Modo analógico
+  GPIO_InitStruct.Pull = GPIO_NOPULL;              // Sin pull
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  
+  pa0_adc_initialized = 1;
+}
+
+static uint16_t Read_PA0_ADC(void)
+{
+  if (!pa0_adc_initialized) {
+    Init_PA0_ADC();
+  }
+  
+  ADC_HandleTypeDef hadc;
+  ADC_ChannelConfTypeDef sConfig = {0};
+  
+  // Configuración ADC
+  hadc.Instance = ADC1;
+  hadc.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV2;
+  hadc.Init.Resolution = ADC_RESOLUTION_12B;
+  hadc.Init.ScanConvMode = ADC_SCAN_ENABLE;
+  hadc.Init.ContinuousConvMode = DISABLE;
+  hadc.Init.DiscontinuousConvMode = DISABLE;
+  hadc.Init.ExternalTrigConv = ADC_SOFTWARE_START;
+  hadc.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
+  hadc.Init.DataAlign = ADC_DATAALIGN_RIGHT;
+  
+  if (HAL_ADC_Init(&hadc) != HAL_OK) {
+    return 0;
+  }
+  
+  // Configurar canal 0 (PA0)
+  sConfig.Channel = ADC_CHANNEL_0;
+  sConfig.Rank = 1;
+  sConfig.SamplingTime = ADC_SAMPLETIME_239CYCLES_5;
+  
+  if (HAL_ADC_ConfigChannel(&hadc, &sConfig) != HAL_OK) {
+    return 0;
+  }
+  
+  // Realizar conversión
+  HAL_ADC_Start(&hadc);
+  if (HAL_ADC_PollForConversion(&hadc, 100) == HAL_OK) {
+    uint16_t result = HAL_ADC_GetValue(&hadc);
+    HAL_ADC_Stop(&hadc);
+    pa0_adc_value = result;
+    pa0_last_read = HAL_GetTick();
+    return result;
+  }
+  
+  HAL_ADC_Stop(&hadc);
+  return 0;
+}
+
+// ⭐ FUNCIÓN: Escalar ADC PA0 (12-bit) a dirección I2C válida (7-bit)
+static uint8_t Scale_ADC_To_I2C_Address(uint16_t adc_value)
+{
+  // Rango ADC: 0-4095 (12 bits)
+  // Rango I2C válido: 0x08-0x77 (7 bits, evitando direcciones reservadas)
+  
+  // Definir rango de direcciones I2C válidas
+  const uint8_t I2C_MIN_ADDR = 0x08;  // Dirección mínima válida
+  const uint8_t I2C_MAX_ADDR = 0x77;  // Dirección máxima válida  
+  const uint8_t I2C_RANGE = I2C_MAX_ADDR - I2C_MIN_ADDR + 1;  // 112 direcciones posibles
+  
+  // Asegurar que el valor ADC esté en rango válido (0-4095)
+  if (adc_value > 4095) {
+    adc_value = 4095;
+  }
+  
+  // Escalar ADC (0-4095) a rango I2C (0-111)
+  uint32_t scaled_value = (adc_value * (uint32_t)I2C_RANGE) / 4096;
+  
+  // Asegurar que no exceda el rango
+  if (scaled_value >= I2C_RANGE) {
+    scaled_value = I2C_RANGE - 1;
+  }
+  
+  // Convertir a dirección I2C válida
+  uint8_t i2c_address = I2C_MIN_ADDR + (uint8_t)scaled_value;
+  
+  // Verificación final de seguridad - CRÍTICA
+  // Evitar: 0x00-0x07 (reservadas), 0x78-0x7F (reservadas)
+  if (i2c_address < I2C_MIN_ADDR) {
+    i2c_address = I2C_MIN_ADDR;
+  }
+  if (i2c_address > I2C_MAX_ADDR) {
+    i2c_address = I2C_MAX_ADDR;
+  }
+  
+  return i2c_address;
+}
+
+// ═══════════════════════════════════════════════════════════
+//            📍 CONFIGURACIÓN PB0: Entrada Digital
+// ═══════════════════════════════════════════════════════════
+static void Init_PB0_Digital(void)
+{
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+  
+  // Habilitar reloj
+  __HAL_RCC_GPIOB_CLK_ENABLE();
+  
+  // Configurar PB0 como entrada digital con pull-up
+  GPIO_InitStruct.Pin = GPIO_PIN_0;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;          // Entrada digital
+  GPIO_InitStruct.Pull = GPIO_PULLUP;              // Pull-up interno
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;     // Velocidad baja
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+  
+  pb0_initialized = 1;
+  Read_PB0_Digital();
+}
+
+static void Read_PB0_Digital(void)
+{
+  if (!pb0_initialized) {
+    Init_PB0_Digital();
+  }
+  
+  // Leer estado digital de PB0
+  GPIO_PinState pin_state = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_0);
+  pb0_digital_state = (pin_state == GPIO_PIN_SET) ? 1 : 0;
+  pb0_last_read = HAL_GetTick();
+}
+
+// ═══════════════════════════════════════════════════════════
+//                     FUNCIONES PWM
+// ═══════════════════════════════════════════════════════════
+static void Set_PWM_Frequency(uint16_t frequency_hz)
+{
+  // Detener timer
+  TIM3->CR1 &= ~(1 << 0);
+  
+  // Calcular nuevos valores
+  uint32_t target_period = 24000000 / frequency_hz;
+  uint16_t prescaler = 1;
+  uint16_t arr_value = target_period - 1;
+  
+  if (target_period > 65535) {
+    prescaler = target_period / 65535 + 1;
+    arr_value = (target_period / prescaler) - 1;
+  }
+  
+  // Aplicar nuevos valores
+  TIM3->PSC = prescaler - 1;
+  TIM3->ARR = arr_value;
+  TIM3->CCR2 = arr_value / 2;                     // 50% duty cycle en canal 2
+  
+  // Habilitar salida canal 2
+  TIM3->CCER |= (1 << 4);                         // CC2E = 1 (enable channel 2)
+  
+  // Generar evento de actualización
+  TIM3->EGR |= (1 << 0);
+  
+  // Reiniciar timer
+  TIM3->CR1 |= (1 << 0);
+}
+
+// ═══════════════════════════════════════════════════════════
+//                 PROTOCOLO CON PB0 INCLUIDO
+// ═══════════════════════════════════════════════════════════
+static uint8_t Build_Response_With_PB0(uint8_t base_response)
+{
+  // Leer estado actual de PB0
+  Read_PB0_Digital();
+  
+  // Combinar respuesta base (bits 0-3) con estado PB0 (bits 4-7)
+  uint8_t response_lower = base_response & 0x0F;
+  uint8_t digital_mask = pb0_digital_state ? 0xF0 : 0x00;
+  
+  return digital_mask | response_lower;
+}
+
+static void I2C_Recovery(void)
+{
+  HAL_I2C_DeInit(&I2cHandle);
+  HAL_Delay(10);
+  HAL_I2C_Init(&I2cHandle);
+}
+
+// ═══════════════════════════════════════════════════════════
+//            📍 FUNCIONES DIRECCIÓN I2C DINÁMICA
+// ═══════════════════════════════════════════════════════════
+static uint32_t Get_Device_UID(void)
+{
+  // Leer UID del dispositivo PY32F0xx (96 bits total)
+  // Intentar la dirección principal primero
+  uint32_t uid_word0 = *(volatile uint32_t*)(UID_BASE_ADDRESS + 0);
+  uint32_t uid_word1 = *(volatile uint32_t*)(UID_BASE_ADDRESS + 4);
+  uint32_t uid_word2 = *(volatile uint32_t*)(UID_BASE_ADDRESS + 8);
+  
+  // Si la dirección principal no tiene datos válidos, probar dirección alternativa
+  if ((uid_word0 == 0 && uid_word1 == 0 && uid_word2 == 0) ||
+      (uid_word0 == 0xFFFFFFFF && uid_word1 == 0xFFFFFFFF && uid_word2 == 0xFFFFFFFF)) {
+    
+    uid_word0 = *(volatile uint32_t*)(UID_ALT_ADDRESS + 0);
+    uid_word1 = *(volatile uint32_t*)(UID_ALT_ADDRESS + 4);
+    uid_word2 = *(volatile uint32_t*)(UID_ALT_ADDRESS + 8);
+  }
+  
+  // Si aún no tenemos datos válidos, generar UID basado en otros registros del sistema
+  if ((uid_word0 == 0 && uid_word1 == 0 && uid_word2 == 0) ||
+      (uid_word0 == 0xFFFFFFFF && uid_word1 == 0xFFFFFFFF && uid_word2 == 0xFFFFFFFF)) {
+    
+    // Generar UID usando diferentes fuentes del sistema
+    uid_word0 = (uint32_t)&uid_word0;           // Dirección de memoria como semilla
+    uid_word1 = HAL_GetTick();                  // Timestamp como variación
+    uid_word2 = ((uint32_t)&I2cHandle) ^ 0x12345678;  // Otra dirección + constante
+  }
+  
+  // Combinar los 96 bits en un valor de 32 bits usando XOR y rotación
+  uint32_t combined_uid = uid_word0 ^ uid_word1 ^ uid_word2;
+  
+  // Aplicar rotación adicional para mejor distribución
+  combined_uid = (combined_uid << 13) | (combined_uid >> 19);
+  
+  // Asegurar que nunca sea 0 y evitar valores que generen 0x51
+  if (combined_uid == 0) {
+    combined_uid = 0xDEADBEEF;
+  }
+  
+  // Si el resultado generaría 0x51, modificarlo
+  uint8_t test_addr = Calculate_I2C_Address_Internal(combined_uid);
+  if (test_addr == 0x51) {
+    combined_uid ^= 0xAAAA5555;  // XOR con patrón para cambiar resultado
+  }
+  
+  return combined_uid;
+}
+
+// Función interna para calcular dirección sin evitar 0x51
+static uint8_t Calculate_I2C_Address_Internal(uint32_t uid)
+{
+  uint32_t hash = uid;
+  hash ^= (hash >> 16);
+  hash ^= (hash >> 8);
+  
+  uint8_t addr = (uint8_t)(hash % (I2C_ADDR_MAX - I2C_ADDR_MIN + 1)) + I2C_ADDR_MIN;
+  
+  if (addr == 0x00 || addr == 0x01 || addr == 0x02 || addr == 0x03 ||
+      addr == 0x04 || addr == 0x05 || addr == 0x06 || addr == 0x07 ||
+      addr >= 0x78) {
+    addr = 0x42;
+  }
+  
+  return addr;
+}
+
+static uint8_t Calculate_I2C_Address(uint32_t uid)
+{
+  // Verificar que el UID no sea 0 o 0xFFFFFFFF (valores inválidos)
+  if (uid == 0 || uid == 0xFFFFFFFF) {
+    // Si el UID es inválido, usar dirección fija pero diferente
+    return 0x42;
+  }
+  
+  // Calcular dirección I2C basada en UID usando mejor distribución
+  // Usar hash simple para mejor distribución
+  uint32_t hash = uid;
+  hash ^= (hash >> 16);  // XOR con bits superiores
+  hash ^= (hash >> 8);   // XOR con bits medios
+  
+  uint8_t addr = (uint8_t)(hash % (I2C_ADDR_MAX - I2C_ADDR_MIN + 1)) + I2C_ADDR_MIN;
+  
+  // Evitar direcciones reservadas específicas
+  if (addr == 0x00 || addr == 0x01 || addr == 0x02 || addr == 0x03 ||
+      addr == 0x04 || addr == 0x05 || addr == 0x06 || addr == 0x07 ||
+      addr >= 0x78) {
+    addr = 0x42; // Dirección por defecto diferente de 0x51
+  }
+  
+  // Evitar específicamente 0x51 para forzar direcciones dinámicas
+  if (addr == 0x51) {
+    addr = 0x43;
+  }
+  
+  return addr;
+}
+
+// ═══════════════════════════════════════════════════════════
+//                        FUNCIÓN PRINCIPAL
+// ═══════════════════════════════════════════════════════════
+int main(void)
+{
+  HAL_Init();
+  APP_SystemClockConfig();
+
+  // Inicializar NeoPixels en PA1 (ya configurado)
+  NEO_init();
+  NEO_clearAll();
+  NEO_update();
+
+  // Confirmación visual: NeoPixels azules
+  for (int i = 0; i < NEO_COUNT; i++)
+    NEO_writeColor(i, 0, 0, 100);
+  NEO_update();
+  HAL_Delay(500);
+  
+  NEO_clearAll();
+  NEO_update();
+  HAL_Delay(200);
+
+  // ═══════════════════════════════════════════════════════════
+  //            📍 INICIALIZACIÓN TODOS LOS PINES
+  // ═══════════════════════════════════════════════════════════
+  Init_I2C_Pins();        // PB6 SCL + PA10 SDA
+  Init_PA2_Relay();       // PA2 Salida relé
+  Init_PWM_PB5();         // PB5 Timer PWM TIM3_CH2 AF1
+  Init_PB0_Digital();     // PB0 Entrada digital
+  Init_PA0_ADC();         // PA0 Entrada analógica
+  // PA1 NeoPixel ya inicializado
+
+  // ═══════════════════════════════════════════════════════════
+  //            📍 CONFIGURAR DIRECCIÓN I2C DINÁMICA
+  // ═══════════════════════════════════════════════════════════
+  // Obtener UID del dispositivo
+  uint32_t device_uid = Get_Device_UID();
+  
+  // Calcular dirección I2C dinámica
+  uint8_t dynamic_i2c_addr = Calculate_I2C_Address(device_uid);
+
+  // ═══════════════════════════════════════════════════════════
+  //            📍 CONFIRMACIÓN VISUAL DIRECCIÓN DINÁMICA
+  // ═══════════════════════════════════════════════════════════
+  // Mostrar dirección I2C mediante NeoPixels (representación visual del UID)
+  for (int i = 0; i < NEO_COUNT && i < 4; i++) {
+    // Usar bits diferentes del UID para cada LED
+    uint8_t color_index = (device_uid >> (i * 8)) & 0x07; // 3 bits por LED
+    
+    switch (color_index) {
+      case 0: NEO_writeColor(i, 255, 0, 0);   break; // Rojo
+      case 1: NEO_writeColor(i, 0, 255, 0);   break; // Verde  
+      case 2: NEO_writeColor(i, 0, 0, 255);   break; // Azul
+      case 3: NEO_writeColor(i, 255, 255, 0); break; // Amarillo
+      case 4: NEO_writeColor(i, 255, 0, 255); break; // Magenta
+      case 5: NEO_writeColor(i, 0, 255, 255); break; // Cian
+      case 6: NEO_writeColor(i, 255, 128, 0); break; // Naranja
+      case 7: NEO_writeColor(i, 128, 0, 255); break; // Púrpura
+    }
+  }
+  NEO_update();
+  HAL_Delay(2000); // Mostrar patrón UID por 2 segundos
+  
+  NEO_clearAll();
+  NEO_update();
+  HAL_Delay(200);
+
+  // Secuencia POST con PWM
+  Set_PWM_Frequency(200);  HAL_Delay(100);
+  Set_PWM_Frequency(400);  HAL_Delay(100);
+  Set_PWM_Frequency(800);  HAL_Delay(100);
+  
+  // Apagar PWM y mostrar sistema listo
+  TIM3->CCR2 = 0;
+  TIM3->CCER &= ~(1 << 4);
+  TIM3->CR1 &= ~(1 << 0);
+  
+  for (int i = 0; i < NEO_COUNT; i++)
+    NEO_writeColor(i, 0, 0, 150);
+  NEO_update();
+  HAL_Delay(1000);
+  
+  NEO_clearAll();
+  NEO_update();
+
+  // Configurar I2C con dirección dinámica
+  __HAL_RCC_I2C_FORCE_RESET();
+  __HAL_RCC_I2C_RELEASE_RESET();
+
+  I2cHandle.Instance = I2C;
+  I2cHandle.Init.ClockSpeed = I2C_SPEEDCLOCK;
+  I2cHandle.Init.DutyCycle = I2C_DUTYCYCLE;
+  I2cHandle.Init.OwnAddress1 = (dynamic_i2c_addr << 1); // Usar dirección dinámica calculada
+  I2cHandle.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+  I2cHandle.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+
+  if (HAL_I2C_Init(&I2cHandle) != HAL_OK)
+  {
+    APP_ErrorHandler();
+  }
+
+  int error_count = 0;
+
+  // ═══════════════════════════════════════════════════════════
+  //                    BUCLE PRINCIPAL I2C
+  // ═══════════════════════════════════════════════════════════
+  while (1)
+  {
+    HAL_StatusTypeDef rx = HAL_I2C_Slave_Receive(&I2cHandle, aRxBuffer, DARA_LENGTH, I2C_TIMEOUT);
+
+    if (rx != HAL_OK)
+    {
+      error_count++;
+      if (error_count >= MAX_I2C_ERRORS) {
+        I2C_Recovery();
+        error_count = 0;
+      }
+    }
+    else
+    {
+      uint8_t response_code = RESP_CMD_UNKNOWN;
+
+      // ═══════════════════════════════════════════════════════════
+      //                PROCESAMIENTO DE COMANDOS
+      // ═══════════════════════════════════════════════════════════
+      
+      // Comandos sistema
+      if (aRxBuffer[0] == CMD_RELAY_ON)
+      {
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_SET);  // Encender RELÉ PA2
+        response_code = RESP_RELAY_ON;
+      }
+      else if (aRxBuffer[0] == CMD_RELAY_OFF)
+      {
+        // Apagar relé PA2
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_RESET);  // Apagar RELÉ PA2
+        // Apagar PWM TIM3
+        TIM3->CCR2 = 0;
+        TIM3->CCER &= ~(1 << 4);
+        TIM3->CR1 &= ~(1 << 0);
+        NEO_clearAll();
+        NEO_update();
+        response_code = RESP_RELAY_OFF;
+      }
+      
+      // Comandos NeoPixels PA1
+      else if (aRxBuffer[0] == CMD_RED)
+      {
+        for (int i = 0; i < NEO_COUNT; i++)
+          NEO_writeColor(i, 128, 0, 0);
+        NEO_update();
+        response_code = RESP_NEO_RED;
+      }
+      else if (aRxBuffer[0] == CMD_GREEN)
+      {
+        for (int i = 0; i < NEO_COUNT; i++)
+          NEO_writeColor(i, 0, 128, 0);
+        NEO_update();
+        response_code = RESP_NEO_GREEN;
+      }
+      else if (aRxBuffer[0] == CMD_BLUE)
+      {
+        for (int i = 0; i < NEO_COUNT; i++)
+          NEO_writeColor(i, 0, 0, 128);
+        NEO_update();
+        response_code = RESP_NEO_BLUE;
+      }
+      else if (aRxBuffer[0] == CMD_OFF)
+      {
+        for (int i = 0; i < NEO_COUNT; i++)
+          NEO_writeColor(i, 0, 0, 0);
+        NEO_update();
+        response_code = RESP_NEO_OFF;
+      }
+      
+      // Comandos sensores
+      else if (aRxBuffer[0] == CMD_PA4_DIGITAL)
+      {
+        // Asegurar respuesta rápida para compatibilidad con maestro
+        if (!pb0_initialized) {
+          Init_PB0_Digital();
+        } else {
+          Read_PB0_Digital();  // Leer estado actual siempre
+        }
+        response_code = RESP_PB0_DIGITAL;
+      }
+      else if (aRxBuffer[0] == CMD_PA0_ADC)
+      {
+        uint16_t adc_value = Read_PA0_ADC();
+        aTxBuffer[0] = (uint8_t)(adc_value >> 4);  // 8 bits superiores
+        response_code = RESP_PA0_ADC;
+      }
+      
+      // ⭐ COMANDOS ADC PA0 (12-bit dividido en HSB + LSB)
+      else if (aRxBuffer[0] == CMD_ADC_PA0_HSB)  // 0xD8: Leer ADC PA0 - HSB (bits 11-8)
+      {
+        // Si la lectura es muy antigua (>50ms) o primera vez, hacer nueva lectura
+        if ((HAL_GetTick() - pa0_last_read) > 50 || !pa0_adc_initialized) {
+          Read_PA0_ADC();
+        }
+        // Enviar HSB (bits 11-8) - 4 bits superiores del ADC en bits inferiores del byte
+        uint8_t hsb = (pa0_adc_value >> 8) & 0x0F;  // Extraer bits 11-8
+        aTxBuffer[0] = Build_Response_With_PB0(hsb);  // PB0 en bits superiores, HSB en inferiores
+        
+        HAL_StatusTypeDef tx = HAL_I2C_Slave_Transmit(&I2cHandle, aTxBuffer, DARA_LENGTH, I2C_TIMEOUT);
+        if (tx != HAL_OK) {
+          error_count++;
+          if (error_count >= MAX_I2C_ERRORS) {
+            I2C_Recovery();
+            error_count = 0;
+          }
+        } else {
+          error_count = 0;
+        }
+        continue; // Saltar el envío normal de respuesta
+      }
+      else if (aRxBuffer[0] == CMD_ADC_PA0_LSB)  // 0xD9: Leer ADC PA0 - LSB (bits 7-0)
+      {
+        // Si la lectura es muy antigua (>50ms) o primera vez, hacer nueva lectura
+        if ((HAL_GetTick() - pa0_last_read) > 50 || !pa0_adc_initialized) {
+          Read_PA0_ADC();
+        }
+        // Enviar LSB (bits 7-0) completo - necesito enviar byte completo, no solo 4 bits
+        // Para esto voy a usar un protocolo especial: LSB completo sin PB0
+        aTxBuffer[0] = pa0_adc_value & 0xFF;  // Byte completo LSB (bits 7-0)
+        
+        HAL_StatusTypeDef tx = HAL_I2C_Slave_Transmit(&I2cHandle, aTxBuffer, DARA_LENGTH, I2C_TIMEOUT);
+        if (tx != HAL_OK) {
+          error_count++;
+          if (error_count >= MAX_I2C_ERRORS) {
+            I2C_Recovery();
+            error_count = 0;
+          }
+        } else {
+          error_count = 0;
+        }
+        continue; // Saltar el envío normal de respuesta
+      }
+      else if (aRxBuffer[0] == CMD_ADC_PA0_I2C)  // 0xDA: Leer ADC PA0 escalado a dirección I2C
+      {
+        // Si la lectura es muy antigua (>50ms) o primera vez, hacer nueva lectura
+        if ((HAL_GetTick() - pa0_last_read) > 50 || !pa0_adc_initialized) {
+          Read_PA0_ADC();
+        }
+        
+        // Escalar valor ADC (0-4095) a dirección I2C válida (0x08-0x77)
+        uint8_t i2c_scaled_addr = Scale_ADC_To_I2C_Address(pa0_adc_value);
+        
+        // ⭐ VERIFICACIÓN CRÍTICA: Asegurar que la dirección esté en rango válido
+        if (i2c_scaled_addr < 0x08 || i2c_scaled_addr > 0x77) {
+          // Si está fuera de rango, forzar a un valor válido proporcional
+          if (pa0_adc_value >= 2048) {
+            i2c_scaled_addr = 0x77;  // ADC alto → dirección alta
+          } else {
+            i2c_scaled_addr = 0x08;  // ADC bajo → dirección baja
+          }
+        }
+        
+        // Enviar dirección I2C escalada (sin PB0, ya que es información de direccionamiento)
+        aTxBuffer[0] = i2c_scaled_addr;  // Dirección I2C directa sin protocolo PB0
+        
+        HAL_StatusTypeDef tx = HAL_I2C_Slave_Transmit(&I2cHandle, aTxBuffer, DARA_LENGTH, I2C_TIMEOUT);
+        if (tx != HAL_OK) {
+          error_count++;
+          if (error_count >= MAX_I2C_ERRORS) {
+            I2C_Recovery();
+            error_count = 0;
+          }
+        } else {
+          error_count = 0;
+        }
+        continue; // Saltar el envío normal de respuesta
+      }
+      
+      // Comandos PWM PB5
+      else if (aRxBuffer[0] >= CMD_PWM_MIN && aRxBuffer[0] <= CMD_PWM_MAX)
+      {
+        uint16_t frequency = 100 + ((aRxBuffer[0] - CMD_PWM_MIN) * 900) / 16;
+        Set_PWM_Frequency(frequency);
+        response_code = RESP_PWM_SET;
+      }
+      else if (aRxBuffer[0] == CMD_PWM_OFF)
+      {
+        TIM3->CCR2 = 0;
+        TIM3->CCER &= ~(1 << 4);
+        TIM3->CR1 &= ~(1 << 0);
+        response_code = RESP_PWM_OFF;
+      }
+      else if (aRxBuffer[0] == CMD_PWM_25)
+      {
+        Set_PWM_Frequency(200);
+        response_code = RESP_PWM_SET;
+      }
+      else if (aRxBuffer[0] == CMD_PWM_50)
+      {
+        Set_PWM_Frequency(500);
+        response_code = RESP_PWM_SET;
+      }
+      else if (aRxBuffer[0] == CMD_PWM_75)
+      {
+        Set_PWM_Frequency(1000);
+        response_code = RESP_PWM_SET;
+      }
+      else if (aRxBuffer[0] == CMD_PWM_100)
+      {
+        Set_PWM_Frequency(2000);
+        response_code = RESP_PWM_SET;
+      }
+      
+      // Comandos tonos musicales
+      else if (aRxBuffer[0] == CMD_TONE_DO)
+      {
+        Set_PWM_Frequency(261);
+        response_code = RESP_TONE_SET;
+      }
+      else if (aRxBuffer[0] == CMD_TONE_RE)
+      {
+        Set_PWM_Frequency(294);
+        response_code = RESP_TONE_SET;
+      }
+      else if (aRxBuffer[0] == CMD_TONE_MI)
+      {
+        Set_PWM_Frequency(330);
+        response_code = RESP_TONE_SET;
+      }
+      else if (aRxBuffer[0] == CMD_TONE_FA)
+      {
+        Set_PWM_Frequency(349);
+        response_code = RESP_TONE_SET;
+      }
+      else if (aRxBuffer[0] == CMD_TONE_SOL)
+      {
+        Set_PWM_Frequency(392);
+        response_code = RESP_TONE_SET;
+      }
+      else if (aRxBuffer[0] == CMD_TONE_LA)
+      {
+        Set_PWM_Frequency(440);
+        response_code = RESP_TONE_SET;
+      }
+      else if (aRxBuffer[0] == CMD_TONE_SI)
+      {
+        Set_PWM_Frequency(494);
+        response_code = RESP_TONE_SET;
+      }
+      
+      // Comandos alertas
+      else if (aRxBuffer[0] == CMD_SUCCESS)
+      {
+        Set_PWM_Frequency(800);
+        response_code = RESP_SUCCESS;
+      }
+      else if (aRxBuffer[0] == CMD_OK)
+      {
+        Set_PWM_Frequency(1000);
+        response_code = RESP_OK;
+      }
+      else if (aRxBuffer[0] == CMD_WARNING)
+      {
+        Set_PWM_Frequency(1200);
+        response_code = RESP_WARNING;
+      }
+      else if (aRxBuffer[0] == CMD_ALERT)
+      {
+        Set_PWM_Frequency(1500);
+        response_code = RESP_WARNING;  // Usar RESP_WARNING para alert
+      }
+
+      // Construir respuesta con estado PB0
+      aTxBuffer[0] = Build_Response_With_PB0(response_code);
+
+      HAL_StatusTypeDef tx = HAL_I2C_Slave_Transmit(&I2cHandle, aTxBuffer, DARA_LENGTH, I2C_TIMEOUT);
+      if (tx != HAL_OK)
+      {
+        error_count++;
+        aTxBuffer[0] = RESP_I2C_ERROR;
+        if (error_count >= MAX_I2C_ERRORS) {
+          I2C_Recovery();
+          error_count = 0;
+        }
+        continue;
+      }
+
+      error_count = 0;
+    }
+  }
+}
+
+static void APP_SystemClockConfig(void)
+{
+  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
+  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
+  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
+  RCC_OscInitStruct.HSIDiv = RCC_HSI_DIV1;
+  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_24MHz;
+
+  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
+  {
+    APP_ErrorHandler();
+  }
+
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_PCLK1;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI;
+  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
+
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_1) != HAL_OK)
+  {
+    APP_ErrorHandler();
+  }
+
+  SystemCoreClockUpdate();
+}
+
+void APP_ErrorHandler(void)
+{
+  while (1)
+  {
+  }
+}
+
+#ifdef USE_FULL_ASSERT
+void assert_failed(uint8_t *file, uint32_t line)
+{
+  while (1)
+  {
+  }
+}
+#endif
