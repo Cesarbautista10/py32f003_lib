@@ -336,7 +336,7 @@ static void Force_System_Reset(void)
   NEO_update();
 
   // Apagar relé
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_RESET);
+  // HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_RESET);
   
   // Pequeño delay para que se ejecuten los cambios
   HAL_Delay(10);
