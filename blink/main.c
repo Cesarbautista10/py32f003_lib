@@ -1,6 +1,5 @@
 #include "main.h"
 #include "py32f0xx_hal.h"
-#include "systemConfig.h"
 
 // ═══════════════════════════════════════════════════════════
 //                   SIMPLE BLINK CONFIGURATION
@@ -12,6 +11,7 @@ uint32_t blink_last_toggle = 0;    // Timestamp del último toggle
 uint8_t led_state = 0;             // Estado actual del LED (0 = apagado, 1 = encendido)
 
 // Declaraciones de funciones
+static void SystemClock_Config(void);
 static void Init_PB5_GPIO(void);
 static void Handle_LED_Blink(void);
 
@@ -25,7 +25,7 @@ int main(void)
   HAL_Init();
 
   // Configuración del reloj del sistema
-  APP_SystemClockConfig();
+  SystemClock_Config();
 
   // Inicialización del GPIO PB5
   Init_PB5_GPIO();
@@ -38,7 +38,39 @@ int main(void)
   }
 }
 
+/**
+  * @brief  Configuración del reloj del sistema
+  * @retval None
+  */
+static void SystemClock_Config(void)
+{
+  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
+  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
 
+  // Configurar el oscilador HSI (High Speed Internal)
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
+  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
+  RCC_OscInitStruct.HSIDiv = RCC_HSI_DIV1;
+  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_24MHz;
+
+  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
+  {
+    APP_ErrorHandler();
+  }
+
+  // Configurar los relojes del sistema
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_PCLK1;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI;
+  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
+
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_1) != HAL_OK)
+  {
+    APP_ErrorHandler();
+  }
+
+  SystemCoreClockUpdate();
+}
 
 /**
   * @brief  Inicialización del GPIO PB5 como salida
@@ -91,3 +123,20 @@ static void Handle_LED_Blink(void)
   }
 }
 
+/**
+  * @brief  Manejador de errores
+  * @retval None
+  */
+void APP_ErrorHandler(void)
+{
+  // Deshabilitar interrupciones
+  __disable_irq();
+  
+  // Loop infinito en caso de error
+  while (1)
+  {
+    // Parpadeo rápido del LED para indicar error
+    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_5);
+    HAL_Delay(100);
+  }
+}

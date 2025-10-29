@@ -1,5 +1,6 @@
 {
     "files.associations": {
         "adc_control.h": "c"
-    }
+    },
+    "idf.pythonInstallPath": "/usr/bin/python"
 }

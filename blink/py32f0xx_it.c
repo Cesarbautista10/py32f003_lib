@@ -102,7 +102,10 @@ void DMA1_Channel2_3_IRQHandler(void)
   */
 void I2C1_IRQHandler(void)
 {
-  // I2C1 interrupt handler - no usado en el proyecto blink
+  extern I2C_HandleTypeDef I2cHandle;
+  HAL_I2C_EV_IRQHandler(&I2cHandle);
+  HAL_I2C_ER_IRQHandler(&I2cHandle);
+  HAL_I2C_ER_IRQHandler(&I2cHandle);
 }
 
 /************************ (C) COPYRIGHT Puya *****END OF FILE******************/
