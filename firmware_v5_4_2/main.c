@@ -37,6 +37,12 @@ uint32_t pa4_last_read = 0;          // Timestamp de última lectura PA4
 uint8_t pa4_initialized = 0;         // Flag para saber si PA4 está inicializado como digital
 
 // ═══════════════════════════════════════════════════════════
+//                      VARIABLES TOGGLE NO BLOQUEANTE
+// ═══════════════════════════════════════════════════════════
+uint8_t toggle_pending = 0;          // Flag: toggle en progreso (1 = relé encendido, esperando apagar)
+uint32_t toggle_start_time = 0;      // Timestamp cuando se activó el toggle
+
+// ═══════════════════════════════════════════════════════════
 //                      VARIABLES WATCHDOG Y RESET
 // ═══════════════════════════════════════════════════════════
 uint32_t watchdog_timeout_ms = 2000;    // Timeout de 2 segundos
@@ -44,8 +50,10 @@ uint32_t watchdog_last_refresh = 0;  // Timestamp de última actualización del 
 uint32_t system_uptime = 0;          // Tiempo de funcionamiento del sistema
 uint8_t reset_requested = 0;         // Flag para reset solicitado
 uint32_t last_command_time = 0;      // Timestamp del último comando recibido
-uint8_t system_stable = 1;           // Flag para indicar si el sistema está estable
 uint8_t flash_save_flag = 0;         // Bandera para modo guardado Flash (0x3A activa, siguiente comando se guarda)
+uint32_t error_count = 0;            // Contador global de errores I2C
+uint32_t last_error_reset = 0;       // Timestamp del último reset de errores
+uint32_t last_i2c_transaction = 0;   // Timestamp de última transacción I2C
 
 // ═══════════════════════════════════════════════════════════
 //                   VARIABLES I2C ADDRESS MANAGEMENT (v5_4)
@@ -73,6 +81,11 @@ static void Disable_Watchdog_Temporarily(void);  //  FUNCIÓN DEBUG WATCHDOG
 static uint32_t Get_Device_UID(void);
 static uint8_t Calculate_I2C_Address(uint32_t uid);
 static uint8_t Calculate_I2C_Address_Internal(uint32_t uid);
+
+// Funciones de información del dispositivo
+static uint8_t getDeviceID(void);
+static uint8_t getFlashSize(void);
+static uint8_t getUIDBytes(uint8_t byte_index);
 // static void Display_UID_Pattern(uint32_t uid);  // Comentada - no utilizada
 
 
@@ -317,9 +330,11 @@ static void Read_PA4_Digital(void)
 
 static void I2C_Recovery(void)
 {
+  // Recovery más suave para alta velocidad
   HAL_I2C_DeInit(&I2cHandle);
-  HAL_Delay(10);
+  HAL_Delay(5);  // Reducido para recuperación más rápida
   HAL_I2C_Init(&I2cHandle);
+  HAL_Delay(2);  // Tiempo adicional para estabilización
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -332,7 +347,6 @@ static void Init_Watchdog(void)
   // Configurar variables de software watchdog DESHABILITADO
   watchdog_timeout_ms = 0;              // 0 = DESHABILITADO para evitar reinicios
   watchdog_last_refresh = HAL_GetTick();
-  system_stable = 1;
   
   // Watchdog solo manual, no automático
 }
@@ -386,17 +400,6 @@ static void Check_System_Health(void)
   //  SOFTWARE WATCHDOG: DESHABILITADO PARA EVITAR REINICIOS
   // El watchdog solo se activa por comando manual CMD_WATCHDOG_RESET
   // NO hay timeout automático para evitar reinicios durante operación normal
-  
-  // Verificar si hace mucho que no recibimos comandos (>10 segundos)
-  if (last_command_time > 0 && (current_time - last_command_time) > 10000) {
-    // Sistema inactivo por mucho tiempo, pero estable
-    system_stable = 1;
-  }
-  
-  // Solo refrescar timestamp, sin timeout automático
-  if (system_stable && (current_time - watchdog_last_refresh) > WATCHDOG_REFRESH) {
-    watchdog_last_refresh = current_time;  // Solo actualizar timestamp
-  }
 }
 
 //  FUNCIÓN: Deshabilitar Watchdog Temporalmente (FUNCIÓN DE DEBUG - NO USADA EN PRODUCCIÓN)
@@ -520,6 +523,65 @@ static uint8_t Calculate_I2C_Address(uint32_t uid)
   return addr;
 }
 
+// === FUNCIONES DE INFORMACIÓN DEL DISPOSITIVO ===
+
+/**
+ * @brief Obtiene el ID del dispositivo PY32F003
+ * @return Device ID: 0x16 para F16, 0x18 para F18
+ */
+static uint8_t getDeviceID(void) {
+    // Leer el registro DBGMCU_IDCODE para identificar el dispositivo
+    // En PY32F003: 0x40015800 contiene información del dispositivo
+    uint32_t idcode = *((volatile uint32_t*)0x40015800);
+    
+    // Leer el tamaño de Flash desde el registro específico
+    // PY32F003 tiene registro de tamaño de Flash en 0x1FFF0FE0
+    uint16_t flash_size_kb = *((volatile uint16_t*)0x1FFF0FE0);
+    
+    // Determinar el tipo basado en el tamaño de Flash
+    if (flash_size_kb >= 18) {
+        return 0x18;  // PY32F003F18U6TR (18KB Flash)
+    } else {
+        return 0x16;  // PY32F003F16U6TR (16KB Flash)
+    }
+}
+
+/**
+ * @brief Obtiene el tamaño de Flash en KB
+ * @return Tamaño de Flash (16 o 18)
+ */
+static uint8_t getFlashSize(void) {
+    // Leer registro de tamaño de Flash
+    uint16_t flash_size = *((volatile uint16_t*)0x1FFF0FE0);
+    return (uint8_t)flash_size;
+}
+
+/**
+ * @brief Obtiene bytes del UID único
+ * @param byte_index Índice del byte (0-3)
+ * @return Byte del UID
+ */
+static uint8_t getUIDBytes(uint8_t byte_index) {
+    // UID está en la dirección base 0x1FFF0E00
+    volatile uint32_t* uid_base = (volatile uint32_t*)0x1FFF0E00;
+    
+    if (byte_index > 3) {
+        return 0x00;
+    }
+    
+    // Leer la palabra de 32 bits que contiene el UID
+    uint32_t uid_word = uid_base[0];
+    
+    // Extraer el byte solicitado
+    switch (byte_index) {
+        case 0: return (uint8_t)(uid_word & 0xFF);          // LSB
+        case 1: return (uint8_t)((uid_word >> 8) & 0xFF);
+        case 2: return (uint8_t)((uid_word >> 16) & 0xFF);
+        case 3: return (uint8_t)((uid_word >> 24) & 0xFF);  // MSB
+        default: return 0x00;
+    }
+}
+
 
 int main(void)
 {
@@ -531,11 +593,11 @@ int main(void)
   NEO_update();
 
   // CONFIRMACIÓN RÁPIDA: NeoPixels funcionando
-  // Azul rápido para confirmar hardware NeoPixel
-  for (int i = 0; i < NEO_COUNT; i++)
-    NEO_writeColor(i, 0, 0, 100);
-  NEO_update();
-  HAL_Delay(50);
+  // // Azul rápido para confirmar hardware NeoPixel
+  // for (int i = 0; i < NEO_COUNT; i++)
+  //   NEO_writeColor(i, 0, 0, 100);
+  // NEO_update();
+  // HAL_Delay(50);
   
   NEO_clearAll();
   NEO_update();
@@ -579,21 +641,14 @@ int main(void)
   PWM_Set_Frequency(1000); HAL_Delay(150);  // BEEP 2
   PWM_Stop();              HAL_Delay(50);   // Pausa corta
 
-  // Tono de éxito + NeoPixel azul = sistema en línea
-  // PWM_Set_Frequency(800);  // CMD_SUCCESS
-
+  // Mostrar blanco al arranque = sistema listo
   for (int i = 0; i < NEO_COUNT; i++) {
-    NEO_writeColor(i, 0, 0, 150);    // Azul = Sistema en línea
-    HAL_Delay(10); 
-    NEO_writeColor(i, 0, 150,0);    // Azul = Sistema en línea
-    HAL_Delay(30); 
-    NEO_writeColor(i, 150, 0, 0);    // Azul = Sistema en línea
-    HAL_Delay(10); 
+    NEO_writeColor(i, 150, 150, 150);  // Blanco = Sistema listo
   }
   NEO_update();
   HAL_Delay(10);
   
-  // Apagar PWM y mantener azul por 1 segundo más
+  // Apagar PWM y mantener blanco por 1 segundo
   TIM1->CCR3 = 0;                    
   TIM1->CCER &= ~(1 << 8);           
   TIM1->CR1 &= ~(1 << 0);            
@@ -618,12 +673,30 @@ int main(void)
     APP_ErrorHandler();
   }
 
-  int error_count = 0;
+  // Inicializar timestamp de reset de errores
+  last_error_reset = HAL_GetTick();
 
   while (1)
   {
     //  MONITOREO BÁSICO DEL SISTEMA (sin watchdog automático)
     Check_System_Health();
+    
+    //  RESET AUTOMÁTICO DE ERRORES cada 5 segundos para evitar acumulación
+    if ((HAL_GetTick() - last_error_reset) >= 5000) {
+      error_count = 0;
+      last_error_reset = HAL_GetTick();
+    }
+    
+    //  TOGGLE NO BLOQUEANTE: Verificar si hay que apagar el relé
+    if (toggle_pending && (HAL_GetTick() - toggle_start_time) >= 10) {
+      HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_RESET);  // Apagar relé después de 10ms
+      toggle_pending = 0;  // Limpiar flag
+    }
+    
+    // THROTTLING para alta velocidad: Esperar 1ms mínimo entre transacciones
+    while ((HAL_GetTick() - last_i2c_transaction) < 1) {
+      // Esperar para no saturar el bus I2C
+    }
     
     HAL_StatusTypeDef rx = HAL_I2C_Slave_Receive(&I2cHandle, aRxBuffer, DATA_LENGTH, I2C_TIMEOUT);
 
@@ -637,8 +710,9 @@ int main(void)
     }
     else
     {
-      //  COMANDO RECIBIDO: Solo actualizar timestamp
+      //  COMANDO RECIBIDO: Solo actualizar timestamps
       last_command_time = HAL_GetTick();
+      last_i2c_transaction = HAL_GetTick();
       
       uint8_t response_code = RESP_CMD_UNKNOWN; // Por defecto, comando no reconocido
 
@@ -777,93 +851,70 @@ int main(void)
       }
       else if (aRxBuffer[0] == CMD_TOGGLE )  // 0x06: RELÉ TOGGLE - Alternar RELÉ en PB5
       {
-        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_SET);  // Encender RELÉ PB5
-        HAL_Delay(25);  // Esperar 100 ms
-        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_RESET);  // Apagar RELÉ PB5
+        // Activar toggle no bloqueante
+        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_SET);   // Encender RELÉ inmediatamente
+        toggle_pending = 1;                                    // Marcar que hay toggle pendiente
+        toggle_start_time = HAL_GetTick();                     // Guardar timestamp
+        
         response_code = RESP_TOGGLE;
+        // El relé se apagará automáticamente en el loop principal después de 10ms
       }
       else if (aRxBuffer[0] == CMD_RELAY_OFF)  // 0x00: RELÉ OFF - Apagar RELÉ en PB5
       {
         HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_RESET);  // Apagar RELÉ PB5
         response_code = RESP_RELAY_OFF;
       }
-      else if (aRxBuffer[0] == CMD_RED)  // 0x02: NeoPixels rojos - COMANDO PROBLEMÁTICO
+      else if (aRxBuffer[0] == CMD_RED)  // 0x02: NeoPixels rojos
       {
-        //  OPERACIÓN SIMPLIFICADA PARA CMD_RED
-        
-        // Ejecutar operación NeoPixel directamente
+        //  OPERACIÓN OPTIMIZADA: Sin marcar sistema inestable
         for (int i = 0; i < NEO_COUNT; i++) {
           NEO_writeColor(i, 128, 0, 0);
         }
-        
-        // Ejecutar update
         NEO_update();
-        
         response_code = RESP_NEO_RED;
-        
-        //  Marcar sistema como potencialmente inestable después de CMD_RED
-        system_stable = 0;  // El próximo comando podría fallar
       }
       else if (aRxBuffer[0] == CMD_GREEN)  // 0x03: NeoPixels verdes
       {
-        //  PROTECCIÓN: Refrescar watchdog antes de operaciones NeoPixel
-        Refresh_Watchdog();
-        
+        //  OPERACIÓN OPTIMIZADA: Sin delays innecesarios
         for (int i = 0; i < NEO_COUNT; i++) {
           NEO_writeColor(i, 0, 128, 0);
-          HAL_Delay(1);  // Prevenir saturación
         }
-        
-        Refresh_Watchdog();
         NEO_update();
-        HAL_Delay(5);   // Verificar estabilidad
-        Refresh_Watchdog();
-        
         response_code = RESP_NEO_GREEN;
       }
       else if (aRxBuffer[0] == CMD_BLUE)  // 0x04: NeoPixels azules
       {
-        //  PROTECCIÓN: Refrescar watchdog antes de operaciones NeoPixel
-        Refresh_Watchdog();
-        
+        //  OPERACIÓN OPTIMIZADA: Sin delays innecesarios
         for (int i = 0; i < NEO_COUNT; i++) {
           NEO_writeColor(i, 0, 0, 128);
-          HAL_Delay(1);  // Prevenir saturación
         }
-        
-        Refresh_Watchdog();
         NEO_update();
-        HAL_Delay(5);   // Verificar estabilidad
-        Refresh_Watchdog();
-        
         response_code = RESP_NEO_BLUE;
       }
       else if (aRxBuffer[0] == CMD_OFF)  // 0x05: NeoPixels apagados
       {
-        //  PROTECCIÓN: Este comando podría recuperar el sistema después de un cuelgue
-        Refresh_Watchdog();
-        
+        //  OPERACIÓN OPTIMIZADA: Sin delays innecesarios
         for (int i = 0; i < NEO_COUNT; i++) {
           NEO_writeColor(i, 0, 0, 0);
-          HAL_Delay(1);
         }
-        
-        Refresh_Watchdog();
         NEO_update();
-        HAL_Delay(5);
-        Refresh_Watchdog();
-        
-        //  RECUPERACIÓN: CMD_OFF podría estabilizar el sistema
-        system_stable = 1;
-        
         response_code = RESP_NEO_OFF;
+      }
+      else if (aRxBuffer[0] == CMD_WHITE)  // 0x08: NeoPixels blancos
+      {
+        //  OPERACIÓN OPTIMIZADA: Sin delays innecesarios
+        for (int i = 0; i < NEO_COUNT; i++) {
+          NEO_writeColor(i, 128, 128, 128);
+        }
+        NEO_update();
+        response_code = RESP_NEO_WHITE;
       }
       
       //  COMANDO PA4 DIGITAL
       else if (aRxBuffer[0] == CMD_PA4_DIGITAL)  // 0x07: Leer PA4 como entrada digital
       {
-        // Si la lectura es muy antigua (>100ms) o primera vez, hacer nueva lectura
-        if ((HAL_GetTick() - pa4_last_read) > 10 || pa4_initialized == 0) {
+        // Lectura optimizada: solo re-leer si es muy antigua (>5ms) o primera vez
+        if ((HAL_GetTick() - pa4_last_read) > 5 || pa4_initialized == 0) {
           Read_PA4_Digital();
         }
         // El estado digital se incluye en los bits superiores de la respuesta
@@ -1036,6 +1087,34 @@ int main(void)
       }
       
       // ═══════════════════════════════════════════════════════════
+      //                   COMANDOS DE INFORMACIÓN DEL DISPOSITIVO
+      // ═══════════════════════════════════════════════════════════
+      else if (aRxBuffer[0] == CMD_GET_DEVICE_ID)   // 0x40: Obtener ID del dispositivo
+      {
+        response_code = getDeviceID();
+      }
+      else if (aRxBuffer[0] == CMD_GET_FLASH_SIZE)  // 0x41: Obtener tamaño de Flash
+      {
+        response_code = getFlashSize();
+      }
+      else if (aRxBuffer[0] == CMD_GET_UID_BYTE0)   // 0x42: UID byte 0
+      {
+        response_code = getUIDBytes(0);
+      }
+      else if (aRxBuffer[0] == CMD_GET_UID_BYTE1)   // 0x43: UID byte 1
+      {
+        response_code = getUIDBytes(1);
+      }
+      else if (aRxBuffer[0] == CMD_GET_UID_BYTE2)   // 0x44: UID byte 2
+      {
+        response_code = getUIDBytes(2);
+      }
+      else if (aRxBuffer[0] == CMD_GET_UID_BYTE3)   // 0x45: UID byte 3
+      {
+        response_code = getUIDBytes(3);
+      }
+      
+      // ═══════════════════════════════════════════════════════════
       //                      COMANDOS WATCHDOG Y RESET
       // ═══════════════════════════════════════════════════════════
       else if (aRxBuffer[0] == CMD_RESET)  // 0xFE: Reset inmediato del sistema
@@ -1080,6 +1159,7 @@ int main(void)
       aTxBuffer[0] = Build_Response_With_PA4(response_code);
 
       HAL_StatusTypeDef tx = HAL_I2C_Slave_Transmit(&I2cHandle, aTxBuffer, DATA_LENGTH, I2C_TIMEOUT);
+      
       if (tx != HAL_OK)
       {
         error_count++;

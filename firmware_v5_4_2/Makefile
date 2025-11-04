@@ -7,7 +7,7 @@ PROJECT = firmware_v5
 BUILD_DIR = Build
 
 # MCU type
-MCU_TYPE = PY32F003x4
+MCU_TYPE = PY32F003x6
 
 ##### Options #####
 USE_LL_LIB ?= n

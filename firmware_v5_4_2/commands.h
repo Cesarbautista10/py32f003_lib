@@ -6,8 +6,8 @@
 #define DATA_LENGTH       1
 #define I2C_SPEEDCLOCK    400000
 #define I2C_DUTYCYCLE     I2C_DUTYCYCLE_2
-#define I2C_TIMEOUT       100  // Aumentado de 300 a 1000ms
-#define MAX_I2C_ERRORS    10
+#define I2C_TIMEOUT       50   // Optimizado para alta velocidad: 50ms
+#define MAX_I2C_ERRORS    20   // Aumentado para evitar recovery frecuente
 
 #define I2C_ADDRESS_COUNT 128
 
@@ -32,6 +32,7 @@
 //                      COMANDOS PA4 DIGITAL
 // ═══════════════════════════════════════════════════════════
 #define CMD_PA4_DIGITAL    0x07         // Comando: Leer PA4 como entrada digital
+#define CMD_WHITE          0x08         // Comando: NeoPixels blancos
 
 // Comandos PWM con frecuencias específicas
 #define CMD_PWM_MIN        0x10         // PWM mínimo (rango 0x10-0x1F)
@@ -87,6 +88,16 @@
 #define CMD_RESET_FACTORY  0x3E         // Comando: Reset factory (usar UID por defecto)
 #define CMD_GET_I2C_STATUS 0x3F         // Comando: Obtener estado I2C (Flash vs UID)
 
+// ═══════════════════════════════════════════════════════════
+//                   COMANDOS DE INFORMACIÓN DEL DISPOSITIVO
+// ═══════════════════════════════════════════════════════════
+#define CMD_GET_DEVICE_ID  0x40         // Comando: Obtener ID del dispositivo (F16/F18)
+#define CMD_GET_FLASH_SIZE 0x41         // Comando: Obtener tamaño de Flash
+#define CMD_GET_UID_BYTE0  0x42         // Comando: Obtener UID byte 0
+#define CMD_GET_UID_BYTE1  0x43         // Comando: Obtener UID byte 1
+#define CMD_GET_UID_BYTE2  0x44         // Comando: Obtener UID byte 2
+#define CMD_GET_UID_BYTE3  0x45         // Comando: Obtener UID byte 3
+
 // Respuesta para comandos Flash
 #define RESPONSE_DATA      0x3C         // Respuesta: Operación Flash completada
 
@@ -109,6 +120,7 @@
 #define RESP_TOGGLE        0x06         // RELÉ PB5 alternado exitosamente
 #define RESP_PWM_SET       0x06         // PWM configurado exitosamente
 #define RESP_PWM_OFF       0x07         // PWM desactivado
+#define RESP_NEO_WHITE     0x08         // NeoPixels blancos activados
 #define RESP_PA4_DIGITAL   0x09         // Estado digital de PA4 enviado
 #define RESP_TONE_SET      0x0C         // Tono configurado exitosamente
 #define RESP_SUCCESS       0x0D         // Success ejecutado

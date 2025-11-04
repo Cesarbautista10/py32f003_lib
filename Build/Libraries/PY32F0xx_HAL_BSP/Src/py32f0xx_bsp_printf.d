@@ -19,8 +19,8 @@ Build/Libraries/PY32F0xx_HAL_BSP/Src/py32f0xx_bsp_printf.o: \
  Libraries/PY32F0xx_HAL_BSP/Inc/py32f0xx_bsp_printf.h \
  /usr/include/newlib/stdio.h \
  /usr/lib/gcc/arm-none-eabi/13.2.1/include/stdarg.h \
- /usr/include/newlib/sys/stdio.h firmware_v5_4_1/py32f0xx_hal.h \
- firmware_v5_4_1/py32f0xx_hal_conf.h firmware_v5_4_1/py32f0xx_hal.h \
+ /usr/include/newlib/sys/stdio.h firmware_v5_4_2/py32f0xx_hal.h \
+ firmware_v5_4_2/py32f0xx_hal_conf.h firmware_v5_4_2/py32f0xx_hal.h \
  Libraries/PY32F0xx_HAL_Driver/Inc/py32f0xx_hal_rcc.h \
  Libraries/PY32F0xx_HAL_Driver/Inc/py32f0xx_hal_def.h \
  Libraries/CMSIS/Device/PY32F0xx/Include/py32f0xx.h \
@@ -76,9 +76,9 @@ Libraries/PY32F0xx_HAL_BSP/Inc/py32f0xx_bsp_printf.h:
 /usr/include/newlib/stdio.h:
 /usr/lib/gcc/arm-none-eabi/13.2.1/include/stdarg.h:
 /usr/include/newlib/sys/stdio.h:
-firmware_v5_4_1/py32f0xx_hal.h:
-firmware_v5_4_1/py32f0xx_hal_conf.h:
-firmware_v5_4_1/py32f0xx_hal.h:
+firmware_v5_4_2/py32f0xx_hal.h:
+firmware_v5_4_2/py32f0xx_hal_conf.h:
+firmware_v5_4_2/py32f0xx_hal.h:
 Libraries/PY32F0xx_HAL_Driver/Inc/py32f0xx_hal_rcc.h:
 Libraries/PY32F0xx_HAL_Driver/Inc/py32f0xx_hal_def.h:
 Libraries/CMSIS/Device/PY32F0xx/Include/py32f0xx.h:

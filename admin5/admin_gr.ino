@@ -17,6 +17,14 @@
 #define CMD_NEO_OFF        0x05   // Apagar NeoPixels
 #define CMD_TOGGLE         0x06   // Toggle relé
 #define CMD_PA4_DIGITAL    0x07   // Leer PA4 digital
+#define CMD_NEO_WHITE      0x08   // NeoPixels blancos
+
+// Comandos PWM/Buzzer
+#define CMD_PWM_OFF        0x20   // PWM OFF - Silencio
+#define CMD_PWM_25         0x21   // PWM 25% - Tono grave 200Hz
+#define CMD_PWM_50         0x22   // PWM 50% - Tono medio 500Hz
+#define CMD_PWM_75         0x23   // PWM 75% - Tono agudo 1000Hz
+#define CMD_PWM_100        0x24   // PWM 100% - Tono muy agudo 2000Hz
 
 // Comandos I2C management
 #define CMD_SET_I2C_ADDR   0x3D   // Establecer nueva dirección I2C
@@ -27,6 +35,14 @@
 #define CMD_ADC_PA0_HSB    0xD8   // ADC PA0 High bits
 #define CMD_ADC_PA0_LSB    0xD9   // ADC PA0 Low bits
 #define CMD_ADC_PA0_I2C    0xDA   // ADC PA0 escalado a dirección I2C
+
+// Comandos de información del dispositivo
+#define CMD_GET_DEVICE_ID  0x40   // Obtener ID del dispositivo (F16/F18)
+#define CMD_GET_FLASH_SIZE 0x41   // Obtener tamaño de Flash
+#define CMD_GET_UID_BYTE0  0x42   // Obtener UID byte 0
+#define CMD_GET_UID_BYTE1  0x43   // Obtener UID byte 1
+#define CMD_GET_UID_BYTE2  0x44   // Obtener UID byte 2
+#define CMD_GET_UID_BYTE3  0x45   // Obtener UID byte 3
 
 // Comandos de sistema
 #define CMD_RESET          0xFE   // Reset inmediato del sistema
@@ -58,12 +74,16 @@ uint32_t cycle_count = 0;
 uint32_t total_bus_recoveries = 0;
 uint32_t test_interval = 2000;  // 2 segundos entre ciclos
 uint32_t command_delay = 50;    // 50ms entre comandos
+uint32_t last_keepalive = 0;    // Timestamp del último keep-alive ping
 
 // Modos de test continuo
 enum TestMode {
   TEST_MODE_PA4_ONLY,      // Solo lectura PA4
   TEST_MODE_TOGGLE_ONLY,   // Solo toggle
-  TEST_MODE_BOTH           // Toggle + PA4
+  TEST_MODE_BOTH,          // Toggle + PA4
+  TEST_MODE_NEO_CYCLE,     // Ciclo NeoPixels (R->G->B->OFF)
+  TEST_MODE_PWM_TONES,     // Ciclo tonos PWM (OFF->25->50->75->100->OFF)
+  TEST_MODE_ADC_PA0        // Solo lectura ADC PA0
 };
 TestMode current_test_mode = TEST_MODE_PA4_ONLY;
 
@@ -96,10 +116,12 @@ bool sendBasicCommand(uint8_t address, uint8_t command);
 uint16_t readADC(uint8_t address);
 uint8_t readPA4Digital(uint8_t address);
 void testAllCommands(uint8_t address);
+void showDeviceInfo(uint8_t address);
+void showDeviceUID(uint8_t address);
 
 // Lectura robusta con reintentos
 bool i2cReadByteWithRetry(uint8_t address, uint8_t command, uint8_t* out,
-                          uint8_t attempts = 2, uint32_t wait_ms = 40);
+                          uint8_t attempts = 3, uint32_t wait_ms = 30);
 
 void setup() {
   Serial.begin(115200);
@@ -164,40 +186,59 @@ void printMenu() {
   Serial.println("6. 'f XX'           = Factory reset del dispositivo");
   Serial.println("7. 'st XX'          = Estado I2C del dispositivo");
   Serial.println("8. 'r XX'           = Reiniciar dispositivo");
-  Serial.println("9. 'vc XX YY'       = Verificar cambio XX->YY");
+  Serial.println("9. 'r all'          = Reiniciar todos los dispositivos");
+  Serial.println("10. 'vc XX YY'      = Verificar cambio XX->YY");
   Serial.println("");
   Serial.println("=== TEST CONTINUO ===");
-  Serial.println("10. 'start'         = Iniciar test (modo actual)");
-  Serial.println("11. 'start pa4'     = Test solo lectura PA4");
-  Serial.println("12. 'start toggle'  = Test solo toggle");
-  Serial.println("13. 'start both'    = Test toggle + PA4");
-  Serial.println("14. 'stop'          = Detener test continuo");
-  Serial.println("15. 'interval XX'   = Cambiar intervalo (ms)");
-  Serial.println("16. 'reset-stats'   = Resetear estadisticas");
+  Serial.println("11. 'start'         = Iniciar test (modo actual)");
+  Serial.println("12. 'start pa4'     = Test solo lectura PA4");
+  Serial.println("13. 'start toggle'  = Test solo toggle");
+  Serial.println("14. 'start both'    = Test toggle + PA4");
+  Serial.println("15. 'start neo'     = Test ciclo NeoPixels (W->R->G->B->OFF)");
+  Serial.println("16. 'start pwm'     = Test ciclo tonos PWM");
+  Serial.println("17. 'start adc'     = Test solo lectura ADC PA0");
+  Serial.println("18. 'stop'          = Detener test continuo");
+  Serial.println("19. 'interval XX'   = Cambiar intervalo (ms)");
+  Serial.println("20. 'reset-stats'   = Resetear estadisticas");
+  Serial.println("21. 'recover'       = Recuperar bus I2C manualmente");
+  Serial.println("22. 'test-intervals'= Probar efecto de diferentes intervalos");
+  Serial.println("23. 'test-long'     = Test específico: problema intervalos largos");
   Serial.println("");
   Serial.println("=== COMANDOS DE DISPOSITIVO ===");
-  Serial.println("17. 'relay XX on'   = Encender rele");
-  Serial.println("18. 'relay XX off'  = Apagar rele");
-  Serial.println("19. 'toggle XX'     = Toggle rele (pulso)");
-  Serial.println("20. 'neo XX red'    = NeoPixels rojos");
-  Serial.println("21. 'neo XX green'  = NeoPixels verdes");
-  Serial.println("22. 'neo XX blue'   = NeoPixels azules");
-  Serial.println("23. 'neo XX off'    = Apagar NeoPixels");
-  Serial.println("24. 'adc XX'        = Leer ADC PA0");
-  Serial.println("25. 'pa4 XX'        = Leer PA4 digital");
-  Serial.println("26. 'test XX'       = Test todos los comandos");
+  Serial.println("20. 'relay XX on'   = Encender rele");
+  Serial.println("21. 'relay XX off'  = Apagar rele");
+  Serial.println("22. 'toggle XX'     = Toggle rele (pulso)");
+  Serial.println("23. 'neo XX red'    = NeoPixels rojos");
+  Serial.println("24. 'neo XX green'  = NeoPixels verdes");
+  Serial.println("25. 'neo XX blue'   = NeoPixels azules");
+  Serial.println("26. 'neo XX white'  = NeoPixels blancos");
+  Serial.println("27. 'neo XX off'    = Apagar NeoPixels");
+  Serial.println("27. 'pwm XX off'    = PWM silencio");
+  Serial.println("28. 'pwm XX 25'     = PWM tono grave (200Hz)");
+  Serial.println("29. 'pwm XX 50'     = PWM tono medio (500Hz)");
+  Serial.println("30. 'pwm XX 75'     = PWM tono agudo (1000Hz)");
+  Serial.println("31. 'pwm XX 100'    = PWM tono muy agudo (2000Hz)");
+  Serial.println("32. 'adc XX'        = Leer ADC PA0");
+  Serial.println("33. 'pa4 XX'        = Leer PA4 digital");
+  Serial.println("34. 'test XX'       = Test todos los comandos");
   Serial.println("");
-  Serial.println("27. 'm' / 'menu'    = Mostrar este menu");
-  Serial.println("28. 'help'          = Ayuda detallada");
+  Serial.println("35. 'm' / 'menu'    = Mostrar este menu");
+  Serial.println("36. 'help'          = Ayuda detallada");
   Serial.println("===============================================");
   Serial.println("Ejemplos:");
   Serial.println("  s                 (escanear)");
   Serial.println("  p 32              (ping a 0x20)");
   Serial.println("  c 32 48           (cambiar 0x20->0x30)");
+  Serial.println("  r all             (reiniciar todos)");
   Serial.println("  relay 32 on       (encender rele en 0x20)");
   Serial.println("  start pa4         (test solo lectura PA4)");
   Serial.println("  start toggle      (test solo toggle)");
+  Serial.println("  start neo         (test ciclo NeoPixels W->R->G->B->OFF)");
+  Serial.println("  start pwm         (test ciclo tonos)");
   Serial.println("  start both        (test toggle + PA4)");
+  Serial.println("  start adc         (test solo lectura ADC PA0)");
+  Serial.println("  info 32           (información F16/F18)");
+  Serial.println("  uid 32            (UID único)");
   Serial.println("===============================================\r\n");
 }
 
@@ -233,20 +274,46 @@ void processCommand(String cmd) {
     current_test_mode = TEST_MODE_BOTH;
     startContinuousTest();
     
+  } else if (cmd == "start neo") {
+    current_test_mode = TEST_MODE_NEO_CYCLE;
+    startContinuousTest();
+    
+  } else if (cmd == "start pwm") {
+    current_test_mode = TEST_MODE_PWM_TONES;
+    startContinuousTest();
+    
+  } else if (cmd == "start adc") {
+    current_test_mode = TEST_MODE_ADC_PA0;
+    startContinuousTest();
+    
   } else if (cmd == "stop") {
     stopContinuousTest();
     
   } else if (cmd == "reset-stats") {
     resetStatistics();
     
+  } else if (cmd == "recover") {
+    recoverI2CBus();
+    
+  } else if (cmd == "test-intervals") {
+    testIntervalEffect();
+    
+  } else if (cmd == "test-long") {
+    testLongIntervalProblem();
+    
   } else if (cmd.startsWith("interval ")) {
     String interval_str = cmd.substring(9);
     uint32_t new_interval = interval_str.toInt();
-    if (new_interval >= 100 && new_interval <= 60000) {
+    if (new_interval >= 5 && new_interval <= 60000) {
       test_interval = new_interval;
-      Serial.printf("[OK] Intervalo cambiado a %d ms\r\n", test_interval);
+      last_keepalive = millis();  // Reset keep-alive timer
+      Serial.printf("[OK] Intervalo cambiado a %d ms", test_interval);
+      if (test_interval > 1000) {
+        Serial.printf(" (modo keep-alive activado cada 30s)");
+      }
+      Serial.println();
     } else {
-      Serial.println("ERROR: Intervalo debe estar entre 100-60000 ms\r");
+      Serial.println("ERROR: Intervalo debe estar entre 5-60000 ms\r");
     }
     
   // Comandos con direcciones
@@ -276,9 +343,15 @@ void processCommand(String cmd) {
     
   } else if (cmd.startsWith("r ")) {
     String addr_str = cmd.substring(2);
-    uint8_t address = parseAddress(addr_str);
-    if (address > 0) {
-      resetDevice(address);
+    addr_str.trim();
+    
+    if (addr_str == "all") {
+      resetAllDevices();
+    } else {
+      uint8_t address = parseAddress(addr_str);
+      if (address > 0) {
+        resetDevice(address);
+      }
     }
     
   } else if (cmd.startsWith("vc ")) {
@@ -302,6 +375,9 @@ void processCommand(String cmd) {
   } else if (cmd.startsWith("neo ")) {
     parseNeoCommand(cmd);
     
+  } else if (cmd.startsWith("pwm ")) {
+    parsePWMCommand(cmd);
+    
   } else if (cmd.startsWith("adc ")) {
     String addr_str = cmd.substring(4);
     uint8_t address = parseAddress(addr_str);
@@ -317,6 +393,20 @@ void processCommand(String cmd) {
       uint8_t pa4_state = readPA4Digital(address);
       Serial.printf("[PA4] Dispositivo 0x%02X: %s (%d)\r\n", 
                    address, pa4_state ? "HIGH" : "LOW", pa4_state);
+    }
+    
+  } else if (cmd.startsWith("info ")) {
+    String addr_str = cmd.substring(5);
+    uint8_t address = parseAddress(addr_str);
+    if (address > 0) {
+      showDeviceInfo(address);
+    }
+    
+  } else if (cmd.startsWith("uid ")) {
+    String addr_str = cmd.substring(4);
+    uint8_t address = parseAddress(addr_str);
+    if (address > 0) {
+      showDeviceUID(address);
     }
     
   } else if (cmd.startsWith("test ")) {
@@ -509,11 +599,15 @@ void printHelp() {
   Serial.println("  f 48           - Factory reset (usar UID)");
   Serial.println("  st 32          - Estado I2C (Flash/UID)");
   Serial.println("  r 32           - Reiniciar dispositivo");
+  Serial.println("  r all          - Reiniciar todos los dispositivos");
   Serial.println("");
   Serial.println("TEST CONTINUO:");
   Serial.println("  start pa4      - Test solo lectura PA4");
   Serial.println("  start toggle   - Test solo toggle");
   Serial.println("  start both     - Test toggle + PA4");
+  Serial.println("  start neo      - Test ciclo NeoPixels");
+  Serial.println("  start pwm      - Test ciclo tonos PWM");
+  Serial.println("  start adc      - Test solo lectura ADC PA0");
   Serial.println("  stop           - Detiene test automatico");
   Serial.println("  interval 1000  - Cambia intervalo a 1000ms");
   Serial.println("");
@@ -522,8 +616,19 @@ void printHelp() {
   Serial.println("  relay 32 off   - Apaga rele");
   Serial.println("  toggle 32      - Toggle rele (pulso)");
   Serial.println("  neo 32 red     - NeoPixels rojos");
+  Serial.println("  neo 32 green   - NeoPixels verdes");
+  Serial.println("  neo 32 blue    - NeoPixels azules");
+  Serial.println("  neo 32 white   - NeoPixels blancos");
+  Serial.println("  neo 32 off     - Apagar NeoPixels");
+  Serial.println("  pwm 32 off     - PWM silencio");
+  Serial.println("  pwm 32 25      - PWM tono grave (200Hz)");
+  Serial.println("  pwm 32 50      - PWM tono medio (500Hz)");
+  Serial.println("  pwm 32 75      - PWM tono agudo (1kHz)");
+  Serial.println("  pwm 32 100     - PWM muy agudo (2kHz)");
   Serial.println("  adc 32         - Lee ADC PA0");
   Serial.println("  pa4 32         - Lee entrada digital PA4");
+  Serial.println("  info 32        - Info dispositivo (F16/F18)");
+  Serial.println("  uid 32         - UID único del dispositivo");
   Serial.println("===============================================");
 }
 
@@ -626,6 +731,40 @@ void resetDevice(uint8_t address) {
   Serial.println("SUGERENCIA: Ejecutar 's' para verificar");
 }
 
+void resetAllDevices() {
+  if (device_count == 0) {
+    Serial.println("ERROR: No hay dispositivos. Ejecutar 'scan' primero");
+    return;
+  }
+  
+  Serial.printf("RESET ALL: Reiniciando %d dispositivos...\r\n", device_count);
+  Serial.println("===========================================");
+  
+  int reset_count = 0;
+  for (int i = 0; i < device_count; i++) {
+    uint8_t addr = found_devices[i].address;
+    
+    Wire.beginTransmission(addr);
+    Wire.write(CMD_RESET);
+    uint8_t error = Wire.endTransmission();
+    
+    if (error == 0) {
+      Serial.printf("[%d] 0x%02X: Reset enviado OK\r\n", i, addr);
+      reset_count++;
+    } else {
+      Serial.printf("[%d] 0x%02X: Error al enviar reset (Error:%d)\r\n", i, addr, error);
+    }
+    
+    delay(10);  // Pequeño delay entre resets
+  }
+  
+  Serial.println("===========================================");
+  Serial.printf("[OK] %d de %d dispositivos reseteados\r\n", reset_count, device_count);
+  Serial.println("NOTA: Esperando 3 segundos para reinicio...");
+  delay(3000);
+  Serial.println("SUGERENCIA: Ejecutar 's' para verificar dispositivos");
+}
+
 // Funciones de test continuo
 void startContinuousTest() {
   if (device_count == 0) {
@@ -647,6 +786,15 @@ void startContinuousTest() {
     case TEST_MODE_BOTH:
       mode_name = "Toggle + PA4";
       break;
+    case TEST_MODE_NEO_CYCLE:
+      mode_name = "Ciclo NeoPixels (W->R->G->B->OFF)";
+      break;
+    case TEST_MODE_PWM_TONES:
+      mode_name = "Ciclo tonos PWM (OFF->25->50->75->100)";
+      break;
+    case TEST_MODE_ADC_PA0:
+      mode_name = "Solo lectura ADC PA0";
+      break;
   }
   
   Serial.printf("[OK] Test continuo iniciado - Modo: %s\r\n", mode_name.c_str());
@@ -661,6 +809,19 @@ void stopContinuousTest() {
 void runContinuousTest() {
   cycle_count++;
   Serial.printf("=== CICLO %d ===\r\n", cycle_count);
+  
+  // KEEP-ALIVE AGRESIVO: En intervalos largos, hacer ping antes de cada comando
+  if (test_interval > 1000) {
+    // Ping preventivo antes de cada ciclo para "despertar" el esclavo
+    for (int i = 0; i < device_count; i++) {
+      if (found_devices[i].is_compatible) {
+        // Ping corto para activar el esclavo
+        Wire.beginTransmission(found_devices[i].address);
+        Wire.endTransmission();
+        delay(1);  // Solo 1ms de delay
+      }
+    }
+  }
   
   for (int i = 0; i < device_count; i++) {
     if (found_devices[i].is_compatible) {
@@ -683,8 +844,11 @@ void testDevice(uint8_t index) {
   uint8_t error = Wire.endTransmission();
   
   if (error == 0) {
+    bool command_success = true;  // Flag para rastrear éxito del comando específico
     bool toggle_ok = false;
     uint8_t pa4_state = 0;
+    static uint8_t neo_step = 0;  // Para ciclo de colores
+    static uint8_t pwm_step = 0;  // Para ciclo de tonos
     
     // Ejecutar comandos según el modo seleccionado
     switch(current_test_mode) {
@@ -692,6 +856,7 @@ void testDevice(uint8_t index) {
         // Solo lectura PA4
         pa4_state = readPA4Digital(addr);
         found_devices[index].last_pa4_state = pa4_state;
+        command_success = true;  // Lectura siempre es exitosa si hay comunicación
         Serial.printf("[%d] 0x%02X: OK (PA4:%s)\r\n", 
                      index, addr, 
                      pa4_state ? "HIGH" : "LOW");
@@ -700,34 +865,153 @@ void testDevice(uint8_t index) {
       case TEST_MODE_TOGGLE_ONLY:
         // Solo toggle
         toggle_ok = sendBasicCommand(addr, CMD_TOGGLE);
-        Serial.printf("[%d] 0x%02X: OK (Toggle:%s)\r\n", 
+        command_success = toggle_ok;  // Éxito solo si toggle respondió
+        Serial.printf("[%d] 0x%02X: %s (Toggle:%s)\r\n", 
                      index, addr, 
+                     toggle_ok ? "OK" : "FAIL",
                      toggle_ok ? "OK" : "FAIL");
         break;
         
       case TEST_MODE_BOTH:
         // Toggle + PA4
         toggle_ok = sendBasicCommand(addr, CMD_TOGGLE);
-        delay(100);  // Delay para estabilización después del toggle
+        // Ya no necesitamos delay extra aquí, sendBasicCommand() maneja el timing
         pa4_state = readPA4Digital(addr);
         found_devices[index].last_pa4_state = pa4_state;
-        Serial.printf("[%d] 0x%02X: OK (Toggle:%s, PA4:%s)\r\n", 
+        command_success = toggle_ok;  // Éxito solo si toggle respondió
+        Serial.printf("[%d] 0x%02X: %s (Toggle:%s, PA4:%s)\r\n", 
                      index, addr, 
+                     toggle_ok ? "OK" : "FAIL",
                      toggle_ok ? "OK" : "FAIL",
                      pa4_state ? "HIGH" : "LOW");
         break;
+        
+      case TEST_MODE_NEO_CYCLE:
+        // Ciclo NeoPixels: WHITE -> RED -> GREEN -> BLUE -> OFF
+        {
+          uint8_t neo_cmd = CMD_NEO_OFF;
+          String color_name = "OFF";
+          
+          switch(neo_step % 5) {
+            case 0:
+              neo_cmd = CMD_NEO_WHITE;
+              color_name = "WHITE";
+              break;
+            case 1:
+              neo_cmd = CMD_NEO_RED;
+              color_name = "RED";
+              break;
+            case 2:
+              neo_cmd = CMD_NEO_GREEN;
+              color_name = "GREEN";
+              break;
+            case 3:
+              neo_cmd = CMD_NEO_BLUE;
+              color_name = "BLUE";
+              break;
+            case 4:
+              neo_cmd = CMD_NEO_OFF;
+              color_name = "OFF";
+              break;
+          }
+          
+          bool neo_ok = sendBasicCommand(addr, neo_cmd);
+          command_success = neo_ok;  // Éxito solo si NeoPixel respondió
+          // NO usar delay extra - el test_interval controla la velocidad
+          Serial.printf("[%d] 0x%02X: %s (Neo:%s %s)\r\n", 
+                       index, addr, 
+                       neo_ok ? "OK" : "FAIL",
+                       color_name.c_str(),
+                       neo_ok ? "OK" : "FAIL");
+          neo_step++;
+        }
+        break;
+        
+      case TEST_MODE_PWM_TONES:
+        // Ciclo tonos PWM: OFF -> 25 -> 50 -> 75 -> 100 -> OFF
+        {
+          uint8_t pwm_cmd = CMD_PWM_OFF;
+          String tone_name = "OFF";
+          
+          switch(pwm_step % 5) {
+            case 0:
+              pwm_cmd = CMD_PWM_OFF;
+              tone_name = "OFF";
+              break;
+            case 1:
+              pwm_cmd = CMD_PWM_25;
+              tone_name = "25% (200Hz)";
+              break;
+            case 2:
+              pwm_cmd = CMD_PWM_50;
+              tone_name = "50% (500Hz)";
+              break;
+            case 3:
+              pwm_cmd = CMD_PWM_75;
+              tone_name = "75% (1kHz)";
+              break;
+            case 4:
+              pwm_cmd = CMD_PWM_100;
+              tone_name = "100% (2kHz)";
+              break;
+          }
+          
+          bool pwm_ok = sendBasicCommand(addr, pwm_cmd);
+          command_success = pwm_ok;  // Éxito solo si PWM respondió
+          // NO usar delay extra - el test_interval controla la velocidad
+          Serial.printf("[%d] 0x%02X: %s (PWM:%s %s)\r\n", 
+                       index, addr, 
+                       pwm_ok ? "OK" : "FAIL",
+                       tone_name.c_str(),
+                       pwm_ok ? "OK" : "FAIL");
+          pwm_step++;
+        }
+        break;
+        
+      case TEST_MODE_ADC_PA0:
+        // Solo lectura ADC PA0
+        {
+          uint16_t adc_value = readADC(addr);
+          found_devices[index].last_adc_value = adc_value;
+          command_success = (adc_value > 0);  // Éxito si lectura válida (>0)
+          Serial.printf("[%d] 0x%02X: %s (ADC:%d / 0x%03X)\r\n", 
+                       index, addr, 
+                       command_success ? "OK" : "FAIL",
+                       adc_value, adc_value);
+        }
+        break;
     }
     
-    found_devices[index].successful_tests++;
-    found_devices[index].last_success_time = millis();
-    found_devices[index].consecutive_failures = 0;
-    found_devices[index].is_online = true;
+    // Actualizar estadísticas según resultado del comando
+    if (command_success) {
+      found_devices[index].successful_tests++;
+      found_devices[index].last_success_time = millis();
+      found_devices[index].consecutive_failures = 0;
+      found_devices[index].is_online = true;
+    } else {
+      // El comando falló aunque hubo comunicación I2C
+      found_devices[index].failed_tests++;
+      found_devices[index].last_failure_time = millis();
+      found_devices[index].consecutive_failures++;
+      
+      // Recuperación automática si hay muchos fallos consecutivos
+      if (found_devices[index].consecutive_failures >= 5) {
+        recoverI2CBus();
+        found_devices[index].consecutive_failures = 0;  // Reset después de recovery
+      }
+    }
     
   } else {
     found_devices[index].failed_tests++;
     found_devices[index].last_failure_time = millis();
     found_devices[index].consecutive_failures++;
     found_devices[index].is_online = false;
+    
+    // Recuperación automática si hay muchos fallos consecutivos
+    if (found_devices[index].consecutive_failures >= 5) {
+      recoverI2CBus();
+      found_devices[index].consecutive_failures = 0;  // Reset después de recovery
+    }
     
     Serial.printf("[%d] 0x%02X: FAIL (Error:%d)\r\n", index, addr, error);
   }
@@ -764,16 +1048,76 @@ void resetStatistics() {
   Serial.println("[OK] Estadisticas reseteadas");
 }
 
+// Función de recuperación del bus I2C
+void recoverI2CBus() {
+  Serial.println("[WARNING] Recuperando bus I2C...");
+  
+  // Reinicializar I2C
+  Wire.end();
+  delay(50);
+  Wire.begin(21, 22);  // ESP32 pins
+  Wire.setTimeout(100);
+  Wire.setClock(100000);  // 100kHz
+  
+  total_bus_recoveries++;
+  Serial.printf("[OK] Bus I2C recuperado (total recoveries: %d)\r\n", total_bus_recoveries);
+}
+
 // Funciones de comandos de dispositivo
 bool sendBasicCommand(uint8_t address, uint8_t command) {
-  Wire.beginTransmission(address);
-  Wire.write(command);
-  uint8_t error = Wire.endTransmission();
+  const uint8_t max_retries = 3;
   
-  if (error == 0) {
-    delay(command_delay);
-    return true;
+  // OPTIMIZACIÓN: Para intervalos largos, hacer un warm-up del bus
+  if (test_interval > 1000) {
+    // Limpiar cualquier dato pendiente en el buffer
+    while (Wire.available()) {
+      Wire.read();
+    }
+    
+    // WARM-UP: Ping rápido para "despertar" el esclavo después de inactividad
+    Wire.beginTransmission(address);
+    Wire.endTransmission();
+    delay(2);  // Pequeño delay para que el esclavo se active
   }
+  
+  for (uint8_t retry = 0; retry < max_retries; retry++) {
+    // Pequeño delay entre reintentos
+    if (retry > 0) {
+      delay(5);
+    }
+    
+    Wire.beginTransmission(address);
+    Wire.write(command);
+    uint8_t error = Wire.endTransmission();
+    
+    if (error == 0) {
+      //  CRÍTICO: Leer respuesta del esclavo para evitar buffer lleno
+      // El esclavo responde con un byte de confirmación
+      delay(25);  // Aumentado para dar más tiempo al esclavo
+      
+      uint8_t bytes_received = Wire.requestFrom(address, (uint8_t)1);
+      if (bytes_received == 1 && Wire.available()) {
+        uint8_t response = Wire.read();
+        // Respuesta recibida correctamente
+        
+        //  OPTIMIZACIÓN: Para CMD_TOGGLE, el esclavo ejecuta pulso después de responder
+        // Necesitamos esperar tiempo adicional para el pulso del relé (10ms)
+        if (command == CMD_TOGGLE) {
+          delay(10);  // Tiempo para que complete el pulso de 10ms en el esclavo
+        }
+        
+        return true;
+      } else {
+        // No se recibió respuesta - intentar de nuevo
+        continue;
+      }
+    } else {
+      // Error de transmisión (NACK u otro) - intentar de nuevo
+      continue;
+    }
+  }
+  
+  // Todos los reintentos fallaron
   return false;
 }
 
@@ -781,6 +1125,11 @@ bool sendBasicCommand(uint8_t address, uint8_t command) {
 bool i2cReadByteWithRetry(uint8_t address, uint8_t command, uint8_t* out,
                           uint8_t attempts, uint32_t wait_ms) {
   for (uint8_t i = 0; i < attempts; i++) {
+    // Pequeño delay entre reintentos para evitar saturar el esclavo
+    if (i > 0) {
+      delay(15);
+    }
+    
     Wire.beginTransmission(address);
     Wire.write(command);
     uint8_t err = Wire.endTransmission(true); // enviar STOP
@@ -792,8 +1141,6 @@ bool i2cReadByteWithRetry(uint8_t address, uint8_t command, uint8_t* out,
         return true;
       }
     }
-    // pequeño backoff antes de reintentar
-    delay(10);
   }
   return false;
 }
@@ -825,7 +1172,7 @@ uint16_t readADC(uint8_t address) {
 
 uint8_t readPA4Digital(uint8_t address) {
   uint8_t byte_val = 0;
-  if (!i2cReadByteWithRetry(address, CMD_PA4_DIGITAL, &byte_val, 3, 30)) {
+  if (!i2cReadByteWithRetry(address, CMD_PA4_DIGITAL, &byte_val, 3, 25)) {
     return 0; // fallo -> asumir LOW
   }
   // PA4 está en los bits superiores (7-4)
@@ -983,12 +1330,12 @@ void parseRelayCommand(String cmd) {
 }
 
 void parseNeoCommand(String cmd) {
-  // Acepta: "neo ADDR red/green/blue/off" con uno o varios espacios
+  // Acepta: "neo ADDR red/green/blue/white/off" con uno o varios espacios
   String rest = cmd.substring(4); // quitar 'neo '
   rest.trim();
   int sep = rest.indexOf(' ');
   if (sep == -1) {
-    Serial.println("ERROR: Formato: neo ADDR red/green/blue/off");
+    Serial.println("ERROR: Formato: neo ADDR red/green/blue/white/off");
     return;
   }
   String addr_str = rest.substring(0, sep);
@@ -1011,11 +1358,14 @@ void parseNeoCommand(String cmd) {
   } else if (color == "blue") {
     neo_cmd = CMD_NEO_BLUE;
     color_name = "azules";
+  } else if (color == "white") {
+    neo_cmd = CMD_NEO_WHITE;
+    color_name = "blancos";
   } else if (color == "off") {
     neo_cmd = CMD_NEO_OFF;
     color_name = "apagados";
   } else {
-    Serial.println("ERROR: Usar red/green/blue/off");
+    Serial.println("ERROR: Usar red/green/blue/white/off");
     return;
   }
   
@@ -1023,6 +1373,53 @@ void parseNeoCommand(String cmd) {
     Serial.printf("[OK] NeoPixels %s en 0x%02X\r\n", color_name.c_str(), address);
   } else {
     Serial.printf("ERROR: No se pudo cambiar NeoPixels en 0x%02X\r\n", address);
+  }
+}
+
+void parsePWMCommand(String cmd) {
+  // Acepta: "pwm ADDR off/25/50/75/100" con uno o varios espacios
+  String rest = cmd.substring(4); // quitar 'pwm '
+  rest.trim();
+  int sep = rest.indexOf(' ');
+  if (sep == -1) {
+    Serial.println("ERROR: Formato: pwm ADDR off/25/50/75/100");
+    return;
+  }
+  String addr_str = rest.substring(0, sep);
+  String level = rest.substring(sep + 1);
+  level.trim();
+  level.toLowerCase();
+  
+  uint8_t address = parseAddress(addr_str);
+  if (address == 0) return;
+  
+  uint8_t pwm_cmd = 0;
+  String pwm_name = "";
+  
+  if (level == "off" || level == "0") {
+    pwm_cmd = CMD_PWM_OFF;
+    pwm_name = "silencio";
+  } else if (level == "25") {
+    pwm_cmd = CMD_PWM_25;
+    pwm_name = "25% (200Hz)";
+  } else if (level == "50") {
+    pwm_cmd = CMD_PWM_50;
+    pwm_name = "50% (500Hz)";
+  } else if (level == "75") {
+    pwm_cmd = CMD_PWM_75;
+    pwm_name = "75% (1000Hz)";
+  } else if (level == "100") {
+    pwm_cmd = CMD_PWM_100;
+    pwm_name = "100% (2000Hz)";
+  } else {
+    Serial.println("ERROR: Usar off/25/50/75/100");
+    return;
+  }
+  
+  if (sendBasicCommand(address, pwm_cmd)) {
+    Serial.printf("[OK] PWM %s en 0x%02X\r\n", pwm_name.c_str(), address);
+  } else {
+    Serial.printf("ERROR: No se pudo cambiar PWM en 0x%02X\r\n", address);
   }
 }
 
@@ -1046,4 +1443,187 @@ void verifyAddressChange(uint8_t old_addr, uint8_t new_addr) {
   } else {
     Serial.println("ERROR: Cambio fallido");
   }
+}
+
+void testIntervalEffect() {
+  if (device_count == 0) {
+    Serial.println("ERROR: No hay dispositivos. Ejecutar 'scan' primero");
+    return;
+  }
+  
+  Serial.println("=== TEST DE EFECTO DEL INTERVALO ===");
+  Serial.println("Probando diferentes intervalos para encontrar el punto óptimo...");
+  
+  uint32_t intervals[] = {100, 500, 1000, 2000, 5000};
+  int num_intervals = sizeof(intervals) / sizeof(intervals[0]);
+  
+  uint32_t original_interval = test_interval;
+  TestMode original_mode = current_test_mode;
+  
+  // Configurar para test de toggle
+  current_test_mode = TEST_MODE_TOGGLE_ONLY;
+  
+  for (int i = 0; i < num_intervals; i++) {
+    test_interval = intervals[i];
+    Serial.printf("\n--- Probando intervalo: %d ms ---\r\n", test_interval);
+    
+    // Reset estadísticas
+    resetStatistics();
+    
+    // Ejecutar 10 ciclos
+    for (int cycle = 0; cycle < 10; cycle++) {
+      for (int dev = 0; dev < device_count; dev++) {
+        if (found_devices[dev].is_compatible) {
+          testDevice(dev);
+        }
+      }
+      delay(test_interval);
+    }
+    
+    // Mostrar resultados
+    for (int dev = 0; dev < device_count; dev++) {
+      if (found_devices[dev].total_tests > 0) {
+        float success_rate = (float)found_devices[dev].successful_tests / found_devices[dev].total_tests * 100.0;
+        Serial.printf("  0x%02X: %.1f%% éxito (%d/%d)\r\n",
+                     found_devices[dev].address,
+                     success_rate,
+                     found_devices[dev].successful_tests,
+                     found_devices[dev].total_tests);
+      }
+    }
+  }
+  
+  // Restaurar configuración original
+  test_interval = original_interval;
+  current_test_mode = original_mode;
+  resetStatistics();
+  
+  Serial.println("\n=== CONCLUSIÓN ===");
+  Serial.println("Intervalos < 1000ms generalmente tienen mejor éxito");
+  Serial.println("Intervalos > 1000ms pueden requerir keep-alive");
+  Serial.printf("Intervalo restaurado a: %d ms\r\n", test_interval);
+}
+
+void testLongIntervalProblem() {
+  if (device_count == 0) {
+    Serial.println("ERROR: No hay dispositivos. Ejecutar 'scan' primero");
+    return;
+  }
+  
+  Serial.println("=== TEST ESPECÍFICO: PROBLEMA DE INTERVALOS LARGOS ===");
+  Serial.println("Comparando 500ms (bueno) vs 2000ms (problemático)...");
+  
+  uint8_t test_addr = found_devices[0].address;  // Usar primer dispositivo
+  
+  // Test 1: Intervalo corto (500ms) - 10 comandos
+  Serial.println("\n--- FASE 1: Intervalo 500ms (debería funcionar) ---");
+  int success_500ms = 0;
+  for (int i = 0; i < 10; i++) {
+    if (sendBasicCommand(test_addr, CMD_TOGGLE)) {
+      success_500ms++;
+      Serial.printf("Comando %d: OK\r\n", i + 1);
+    } else {
+      Serial.printf("Comando %d: FAIL\r\n", i + 1);
+    }
+    delay(500);
+  }
+  
+  Serial.printf("Resultado 500ms: %d/10 éxitos (%.1f%%)\r\n", 
+                success_500ms, (success_500ms / 10.0) * 100.0);
+  
+  // Test 2: Intervalo largo (2000ms) - 10 comandos
+  Serial.println("\n--- FASE 2: Intervalo 2000ms (problemático) ---");
+  int success_2000ms = 0;
+  for (int i = 0; i < 10; i++) {
+    if (sendBasicCommand(test_addr, CMD_TOGGLE)) {
+      success_2000ms++;
+      Serial.printf("Comando %d: OK\r\n", i + 1);
+    } else {
+      Serial.printf("Comando %d: FAIL\r\n", i + 1);
+    }
+    delay(2000);
+  }
+  
+  Serial.printf("Resultado 2000ms: %d/10 éxitos (%.1f%%)\r\n", 
+                success_2000ms, (success_2000ms / 10.0) * 100.0);
+  
+  // Análisis
+  Serial.println("\n=== ANÁLISIS ===");
+  if (success_500ms > success_2000ms) {
+    Serial.printf("CONFIRMADO: Intervalos largos tienen %.1f%% menos éxito\r\n",
+                  ((success_500ms - success_2000ms) / 10.0) * 100.0);
+    Serial.println("CAUSA PROBABLE: El esclavo entra en modo de bajo consumo");
+    Serial.println("SOLUCIÓN: Keep-alive ping activado automáticamente");
+  } else {
+    Serial.println("SORPRESA: Los intervalos largos funcionan igual de bien");
+  }
+  
+  Serial.println("\nNOTA: Con las optimizaciones actuales, ambos deberían funcionar mejor");
+}
+
+// === FUNCIONES DE INFORMACIÓN DEL DISPOSITIVO ===
+
+void showDeviceInfo(uint8_t address) {
+  Serial.printf("=== INFORMACIÓN DEL DISPOSITIVO 0x%02X ===\r\n", address);
+  
+  // Obtener Device ID
+  uint8_t device_id = 0;
+  if (i2cReadByteWithRetry(address, CMD_GET_DEVICE_ID, &device_id, 3, 30)) {
+    String device_type = "";
+    if (device_id == 0x16) {
+      device_type = "PY32F003F16U6TR (16KB Flash)";
+    } else if (device_id == 0x18) {
+      device_type = "PY32F003F18U6TR (18KB Flash)";
+    } else {
+      device_type = "Desconocido";
+    }
+    Serial.printf("Tipo: %s (ID: 0x%02X)\r\n", device_type.c_str(), device_id);
+  } else {
+    Serial.println("ERROR: No se pudo leer Device ID");
+  }
+  
+  // Obtener Flash Size
+  uint8_t flash_size = 0;
+  if (i2cReadByteWithRetry(address, CMD_GET_FLASH_SIZE, &flash_size, 3, 30)) {
+    Serial.printf("Flash: %d KB\r\n", flash_size);
+  } else {
+    Serial.println("ERROR: No se pudo leer tamaño de Flash");
+  }
+  
+  Serial.println("=====================================");
+}
+
+void showDeviceUID(uint8_t address) {
+  Serial.printf("=== UID ÚNICO DEL DISPOSITIVO 0x%02X ===\r\n", address);
+  
+  uint8_t uid_bytes[4];
+  bool uid_ok = true;
+  
+  // Leer los 4 bytes del UID
+  for (int i = 0; i < 4; i++) {
+    uint8_t cmd = CMD_GET_UID_BYTE0 + i;
+    if (!i2cReadByteWithRetry(address, cmd, &uid_bytes[i], 3, 30)) {
+      Serial.printf("ERROR: No se pudo leer UID byte %d\r\n", i);
+      uid_ok = false;
+    }
+  }
+  
+  if (uid_ok) {
+    // Mostrar UID como 32-bit hex
+    uint32_t uid = (uint32_t)uid_bytes[3] << 24 | 
+                   (uint32_t)uid_bytes[2] << 16 | 
+                   (uint32_t)uid_bytes[1] << 8 | 
+                   (uint32_t)uid_bytes[0];
+    
+    Serial.printf("UID (32-bit): 0x%08X\r\n", uid);
+    Serial.printf("UID (bytes): %02X %02X %02X %02X\r\n", 
+                  uid_bytes[3], uid_bytes[2], uid_bytes[1], uid_bytes[0]);
+    
+    // Calcular dirección I2C basada en UID (para referencia)
+    uint8_t calculated_addr = 0x20 + (uid_bytes[0] & 0x0F);
+    Serial.printf("Dirección I2C calculada: 0x%02X (%d)\r\n", 
+                  calculated_addr, calculated_addr);
+  }
+  
+  Serial.println("=====================================");
 }
