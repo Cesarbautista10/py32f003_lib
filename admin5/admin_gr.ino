@@ -1,5 +1,13 @@
 #include <Wire.h>
 
+// ESP-IDF logging control (si está disponible)
+#ifdef ESP_PLATFORM
+  #include "esp_log.h"
+  #define HAS_ESP_LOG 1
+#else
+  #define HAS_ESP_LOG 0
+#endif
+
 // ============================================================
 //         I2C DEVICE MANAGER COMPLETO (admin_gr)
 //    Combina funcionalidades de admin_ir + admin5
@@ -126,6 +134,11 @@ bool i2cReadByteWithRetry(uint8_t address, uint8_t command, uint8_t* out,
 void setup() {
   Serial.begin(115200);
   delay(1000);
+  
+  // Suprimir logs de error del I2C master (esperados durante scan)
+  #if HAS_ESP_LOG
+    esp_log_level_set("i2c.master", ESP_LOG_WARN);  // Solo warnings críticos, no timeout esperados
+  #endif
   
   // Inicializar I2C con configuración optimizada
   Wire.begin(21, 22);  // ESP32 (clásico): SDA=GPIO21, SCL=GPIO22. Para ESP32-C3 usa Wire.begin(6, 7)
@@ -426,6 +439,7 @@ void processCommand(String cmd) {
 void scanDevices() {
   Serial.println(">> ESCANEANDO BUS I2C...");
   Serial.println("Rango: 0x08-0x77 (8-119 decimal)");
+  Serial.println("NOTA: Timeouts en direcciones no existentes son normales");
   Serial.println("===========================================");
   
   device_count = 0;
@@ -433,6 +447,15 @@ void scanDevices() {
   
   // Limpiar array de dispositivos
   memset(found_devices, 0, sizeof(found_devices));
+  
+  // Reducir timeout temporalmente para escaneo rápido
+  uint32_t original_timeout = Wire.getTimeOut();
+  Wire.setTimeout(20);  // 20ms es suficiente para detectar dispositivos presentes
+  
+  // Suprimir temporalmente logs de error I2C durante el scan
+  #if HAS_ESP_LOG
+    esp_log_level_set("i2c.master", ESP_LOG_NONE);
+  #endif
   
   for (uint8_t addr = 0x08; addr <= 0x77; addr++) {
     Wire.beginTransmission(addr);
@@ -465,8 +488,14 @@ void scanDevices() {
       }
     }
     
-    delay(5);
+    delay(10);  // Aumentado a 10ms para dar tiempo al PY32F003 entre transacciones
   }
+  
+  // Restaurar timeout original y logs
+  Wire.setTimeout(original_timeout);
+  #if HAS_ESP_LOG
+    esp_log_level_set("i2c.master", ESP_LOG_WARN);  // Restaurar nivel de logs
+  #endif
   
   Serial.println("===========================================");
   
@@ -810,6 +839,11 @@ void runContinuousTest() {
   cycle_count++;
   Serial.printf("=== CICLO %d ===\r\n", cycle_count);
   
+  // Suprimir logs durante test continuo (esperados en intervalos largos)
+  #if HAS_ESP_LOG
+    esp_log_level_set("i2c.master", ESP_LOG_NONE);
+  #endif
+  
   // KEEP-ALIVE AGRESIVO: En intervalos largos, hacer ping antes de cada comando
   if (test_interval > 1000) {
     // Ping preventivo antes de cada ciclo para "despertar" el esclavo
@@ -828,6 +862,11 @@ void runContinuousTest() {
       testDevice(i);
     }
   }
+  
+  // Restaurar logs después del test
+  #if HAS_ESP_LOG
+    esp_log_level_set("i2c.master", ESP_LOG_WARN);
+  #endif
   
   // Mostrar resumen cada 10 ciclos
   if (cycle_count % 10 == 0) {
