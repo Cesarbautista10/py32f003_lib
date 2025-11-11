@@ -1,5 +1,5 @@
 
-Build/locknode_v5_4_2/.elf:     file format elf32-littlearm
+Build/locknode_v5_4_2.elf:     file format elf32-littlearm
 
 
 Disassembly of section .text:
