@@ -797,6 +797,14 @@ int main(void)
     //    POLLING MEJORADO CON RECUPERACIÓN ROBUSTA (TIMEOUT CORTO)
     // ═══════════════════════════════════════════════════════════
     
+    // Verificar si el bus está BUSY antes de intentar recibir
+    if (__HAL_I2C_GET_FLAG(&I2cHandle, I2C_FLAG_BUSY)) {
+      // Bus ocupado - ejecutar recovery inmediata
+      I2C_Recovery();
+      error_count = 0;
+      continue;
+    }
+    
     // Timeout ultra-corto para no bloquear en scans
     HAL_StatusTypeDef rx = HAL_I2C_Slave_Receive(&I2cHandle, aRxBuffer, DATA_LENGTH, 10); // 10ms timeout
 
