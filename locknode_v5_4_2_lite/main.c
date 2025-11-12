@@ -6,6 +6,8 @@
 #include "commands.h"
 #include "systemConfig.h"
 #include "adc_control.h"
+#include "pwm_control.h"
+
 
 
 #define FLASH_SAVE_ADDR     0x08003C00  // última página de 1 KB (en 16 KB totales del PY32F003)
@@ -742,13 +744,18 @@ int main(void)
 
   Init_i2c_pins();
   Init_PB5_Digital();              //  Inicializar PB5 como salida digital
- 
+  PWM_Init_TIM1();   
   Init_PA4_Digital();              //  Inicializar PA4 como entrada digital
   Init_ADC_PA0();                  //  Inicializar ADC en PA0 (12-bit)
   Init_Watchdog();                 //  Inicializar Watchdog Independiente (DESHABILITADO)
 
   //  SONIDO DE ARRANQUE: Secuencia elegante tipo Windows/Mac
-  
+    
+  // Nueva secuencia de arranque estilo "Arturito" (R2-D2) con tonos cortos y rápidos
+// Secuencia rápida tipo "R2-D2" (beeps cortos y continuos)
+PWM_Set_Frequency(1500);
+HAL_Delay(100);   // Duración del beep (~0.1 s)
+PWM_Stop();
 
   
   // Apagar PWM y mantener blanco por 1 segundo
@@ -1006,92 +1013,92 @@ int main(void)
         response_code = RESP_PA4_DIGITAL;
       }
       
-      // Comandos PWM con frecuencias específicas
+       // Comandos PWM con frecuencias específicas
       else if (aRxBuffer[0] >= CMD_PWM_MIN && aRxBuffer[0] <= CMD_PWM_MAX)  // 0x10-0x1F: PWM gradual
       {
         // PWM gradual con diferentes frecuencias: 0x10 = 100Hz, 0x11 = 150Hz, ..., 0x1F = 1000Hz
-        // uint16_t frequency = 100 + ((aRxBuffer[0] - CMD_PWM_MIN) * 900) / 16;  // 100Hz a 1000Hz
-        // PWM_Set_Frequency(frequency);
+        uint16_t frequency = 100 + ((aRxBuffer[0] - CMD_PWM_MIN) * 900) / 16;  // 100Hz a 1000Hz
+        PWM_Set_Frequency(frequency);
         response_code = RESP_PWM_SET;
       }
       else if (aRxBuffer[0] == CMD_PWM_OFF)  // 0x20: PWM OFF - Silencio
       {
-        // PWM_Stop();                        // Parar PWM completamente usando módulo
+        PWM_Stop();                        // Parar PWM completamente usando módulo
         response_code = RESP_PWM_OFF;
       }
       else if (aRxBuffer[0] == CMD_PWM_25)  // 0x21: PWM 25% - Tono grave 200Hz
       {
-        // PWM_Set_Frequency(200);
+        PWM_Set_Frequency(200);
         response_code = RESP_PWM_SET;
       }
       else if (aRxBuffer[0] == CMD_PWM_50)  // 0x22: PWM 50% - Tono medio 500Hz
       {
-        // PWM_Set_Frequency(500);
+        PWM_Set_Frequency(500);
         response_code = RESP_PWM_SET;
       }
       else if (aRxBuffer[0] == CMD_PWM_75)  // 0x23: PWM 75% - Tono agudo 1000Hz
       {
-        // PWM_Set_Frequency(1000);
+        PWM_Set_Frequency(1000);
         response_code = RESP_PWM_SET;
       }
       else if (aRxBuffer[0] == CMD_PWM_100)  // 0x24: PWM 100%
       {
-        // PWM_Set_Frequency(2000);  // Tono muy agudo 2kHz
+        PWM_Set_Frequency(2000);  // Tono muy agudo 2kHz
         response_code = RESP_PWM_SET;
       }
       else if (aRxBuffer[0] == CMD_TONE_DO)  // 0x25: Tono DO (261Hz)
       {
-        // PWM_Set_Frequency(261);
+        PWM_Set_Frequency(261);
         response_code = RESP_TONE_SET;
       }
       else if (aRxBuffer[0] == CMD_TONE_RE)  // 0x26: Tono RE (294Hz)
       {
-        // PWM_Set_Frequency(294);
+        PWM_Set_Frequency(294);
         response_code = RESP_TONE_SET;
       }
       else if (aRxBuffer[0] == CMD_TONE_MI)  // 0x27: Tono MI (330Hz)
       {
-        // PWM_Set_Frequency(330);
+        PWM_Set_Frequency(330);
         response_code = RESP_TONE_SET;
       }
       else if (aRxBuffer[0] == CMD_TONE_FA)  // 0x28: Tono FA (349Hz)
       {
-        // PWM_Set_Frequency(349);
+        PWM_Set_Frequency(349);
         response_code = RESP_TONE_SET;
       }
       else if (aRxBuffer[0] == CMD_TONE_SOL)  // 0x29: Tono SOL (392Hz)
       {
-        // PWM_Set_Frequency(392);
+        PWM_Set_Frequency(392);
         response_code = RESP_TONE_SET;
       }
       else if (aRxBuffer[0] == CMD_TONE_LA)  // 0x2A: Tono LA (440Hz)
       {
-        // PWM_Set_Frequency(440);
+        PWM_Set_Frequency(440);
         response_code = RESP_TONE_SET;
       }
       else if (aRxBuffer[0] == CMD_TONE_SI)  // 0x2B: Tono SI (494Hz)
       {
-        // PWM_Set_Frequency(494);
+        PWM_Set_Frequency(494);
         response_code = RESP_TONE_SET;
       }
       else if (aRxBuffer[0] == CMD_SUCCESS)  // 0x2C: Success - Tono positivo 800Hz
       {
-        // PWM_Set_Frequency(800);
+        PWM_Set_Frequency(800);
         response_code = RESP_SUCCESS;
       }
       else if (aRxBuffer[0] == CMD_OK)  // 0x2D: OK - Confirmación 1000Hz
       {
-        // PWM_Set_Frequency(1000);
+        PWM_Set_Frequency(1000);
         response_code = RESP_OK;
       }
       else if (aRxBuffer[0] == CMD_WARNING)  // 0x2E: Warning - Advertencia 1200Hz
       {
-        // PWM_Set_Frequency(1200);
+        PWM_Set_Frequency(1200);
         response_code = RESP_WARNING;
       }
       else if (aRxBuffer[0] == CMD_ALERT)  // 0x2F: Alert - Alerta crítica 1500Hz
       {
-        // PWM_Set_Frequency(1500);
+        PWM_Set_Frequency(1500);
         response_code = RESP_ALERT;
       }
       

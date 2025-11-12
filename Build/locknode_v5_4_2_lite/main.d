@@ -37,7 +37,8 @@ Build/locknode_v5_4_2_lite/main.o: locknode_v5_4_2_lite/main.c \
  Libraries/PY32F0xx_HAL_Driver/Inc/py32f0xx_hal_uart.h \
  locknode_v5_4_2_lite/py32f0xx_it.h /usr/include/newlib/stdlib.h \
  /usr/include/newlib/machine/stdlib.h locknode_v5_4_2_lite/commands.h \
- locknode_v5_4_2_lite/systemConfig.h locknode_v5_4_2_lite/adc_control.h
+ locknode_v5_4_2_lite/systemConfig.h locknode_v5_4_2_lite/adc_control.h \
+ locknode_v5_4_2_lite/pwm_control.h
 locknode_v5_4_2_lite/main.h:
 locknode_v5_4_2_lite/py32f0xx_hal.h:
 locknode_v5_4_2_lite/py32f0xx_hal_conf.h:
@@ -88,3 +89,4 @@ locknode_v5_4_2_lite/py32f0xx_it.h:
 locknode_v5_4_2_lite/commands.h:
 locknode_v5_4_2_lite/systemConfig.h:
 locknode_v5_4_2_lite/adc_control.h:
+locknode_v5_4_2_lite/pwm_control.h:
