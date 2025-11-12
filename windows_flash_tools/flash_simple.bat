@@ -21,10 +21,9 @@ if not exist "%1" (
 echo Programando: %1
 
 echo Borrando...
-pyocd erase -t py32f003x4 --chip --config Misc/pyocd.yaml
+python -m pyocd erase -t py32f003x4 --chip --config Misc/pyocd.yaml
 
 echo Cargando...
-pyocd load "%1" -t py32f003x4 --config Misc/pyocd.yaml
+python -m pyocd load "%1" -t py32f003x4 --config Misc/pyocd.yaml
 
 echo LISTO!
-pause
