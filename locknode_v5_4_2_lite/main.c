@@ -797,27 +797,25 @@ int main(void)
     //    POLLING MEJORADO CON RECUPERACIÓN ROBUSTA (TIMEOUT CORTO)
     // ═══════════════════════════════════════════════════════════
     
-    // Verificar si el bus está BUSY antes de intentar recibir
-    if (__HAL_I2C_GET_FLAG(&I2cHandle, I2C_FLAG_BUSY)) {
-      // Bus ocupado - ejecutar recovery inmediata
-      I2C_Recovery();
-      error_count = 0;
-      continue;
-    }
+    // ═══════════════════════════════════════════════════════════
+    //    POLLING OPTIMIZADO PARA MÚLTIPLES DISPOSITIVOS (20+)
+    // ═══════════════════════════════════════════════════════════
+    // NOTA: Con 20+ dispositivos en el bus, NO verificar BUSY proactivamente
+    // porque causa recovery innecesaria en buses saturados. 
+    // En su lugar, confiar en timeouts largos y recovery solo ante errores reales.
     
-    // Timeout ultra-corto para no bloquear en scans
-    HAL_StatusTypeDef rx = HAL_I2C_Slave_Receive(&I2cHandle, aRxBuffer, DATA_LENGTH, 10); // 10ms timeout
+    // Timeout aumentado para ambientes multi-dispositivo
+    HAL_StatusTypeDef rx = HAL_I2C_Slave_Receive(&I2cHandle, aRxBuffer, DATA_LENGTH, 15); // 15ms timeout
 
     if (rx != HAL_OK)
     {
-      // Error o timeout - NO incrementar contador agresivamente
-      // Los scans del maestro causan timeouts normales
+      // Error o timeout - Ser MUY tolerante con 20+ dispositivos
       if (rx == HAL_TIMEOUT) {
-        // Timeout normal - ignorar (scan del maestro)
+        // Timeout normal - completamente ignorado en ambientes saturados
         continue;
       }
       
-      // Error real (no timeout)
+      // Error real (no timeout) - incrementar contador pero ser tolerante
       error_count++;
       if (error_count >= MAX_I2C_ERRORS) {
         I2C_Recovery();

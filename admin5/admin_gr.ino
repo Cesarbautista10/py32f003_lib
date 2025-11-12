@@ -439,7 +439,7 @@ void processCommand(String cmd) {
 void scanDevices() {
   Serial.println(">> ESCANEANDO BUS I2C...");
   Serial.println("Rango: 0x08-0x77 (8-119 decimal)");
-  Serial.println("NOTA: Timeouts en direcciones no existentes son normales");
+  Serial.println("NOTA: Optimizado para 20+ dispositivos");
   Serial.println("===========================================");
   
   device_count = 0;
@@ -448,9 +448,9 @@ void scanDevices() {
   // Limpiar array de dispositivos
   memset(found_devices, 0, sizeof(found_devices));
   
-  // Reducir timeout temporalmente para escaneo rápido
+  // Timeout MUY largo para 20+ dispositivos
   uint32_t original_timeout = Wire.getTimeOut();
-  Wire.setTimeout(20);  // 20ms es suficiente para detectar dispositivos presentes
+  Wire.setTimeout(50);  // 50ms - necesario con tantos dispositivos
   
   // Suprimir temporalmente logs de error I2C durante el scan
   #if HAS_ESP_LOG
@@ -488,7 +488,7 @@ void scanDevices() {
       }
     }
     
-    delay(10);  // Aumentado a 10ms para dar tiempo al PY32F003 entre transacciones
+    delay(20);  // CRÍTICO: 20ms entre scans para 20+ dispositivos
   }
   
   // Restaurar timeout original y logs

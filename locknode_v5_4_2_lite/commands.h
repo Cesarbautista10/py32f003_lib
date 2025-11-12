@@ -6,8 +6,8 @@
 #define DATA_LENGTH       1
 #define I2C_SPEEDCLOCK    100000  // 100kHz - MATCH CON ESP32 MASTER
 #define I2C_DUTYCYCLE     I2C_DUTYCYCLE_2
-#define I2C_TIMEOUT       50      // 50ms para operaciones normales
-#define MAX_I2C_ERRORS    20      // Aumentado para evitar recovery frecuente
+#define I2C_TIMEOUT       100     // 100ms para múltiples dispositivos (20+)
+#define MAX_I2C_ERRORS    50      // Muy tolerante para evitar recovery en ambientes saturados
 
 #define I2C_ADDRESS_COUNT 128
 
