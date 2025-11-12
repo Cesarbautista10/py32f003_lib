@@ -1,6 +1,7 @@
-Build/locknode_v5_4_2/pwm_control.o: locknode_v5_4_2/pwm_control.c \
- locknode_v5_4_2/pwm_control.h locknode_v5_4_2/main.h \
- locknode_v5_4_2/py32f0xx_hal.h locknode_v5_4_2/py32f0xx_hal_conf.h \
+Build/locknode_v5_4_2_lite/systemConfig.o: \
+ locknode_v5_4_2_lite/systemConfig.c locknode_v5_4_2_lite/systemConfig.h \
+ locknode_v5_4_2_lite/main.h locknode_v5_4_2_lite/py32f0xx_hal.h \
+ locknode_v5_4_2_lite/py32f0xx_hal_conf.h \
  Libraries/PY32F0xx_HAL_Driver/Inc/py32f0xx_hal_rcc.h \
  Libraries/PY32F0xx_HAL_Driver/Inc/py32f0xx_hal_def.h \
  Libraries/CMSIS/Device/PY32F0xx/Include/py32f0xx.h \
@@ -35,11 +36,11 @@ Build/locknode_v5_4_2/pwm_control.o: locknode_v5_4_2/pwm_control.c \
  Libraries/PY32F0xx_HAL_Driver/Inc/py32f0xx_hal_tim.h \
  Libraries/PY32F0xx_HAL_Driver/Inc/py32f0xx_hal_tim_ex.h \
  Libraries/PY32F0xx_HAL_Driver/Inc/py32f0xx_hal_uart.h \
- locknode_v5_4_2/py32f0xx_it.h
-locknode_v5_4_2/pwm_control.h:
-locknode_v5_4_2/main.h:
-locknode_v5_4_2/py32f0xx_hal.h:
-locknode_v5_4_2/py32f0xx_hal_conf.h:
+ locknode_v5_4_2_lite/py32f0xx_it.h
+locknode_v5_4_2_lite/systemConfig.h:
+locknode_v5_4_2_lite/main.h:
+locknode_v5_4_2_lite/py32f0xx_hal.h:
+locknode_v5_4_2_lite/py32f0xx_hal_conf.h:
 Libraries/PY32F0xx_HAL_Driver/Inc/py32f0xx_hal_rcc.h:
 Libraries/PY32F0xx_HAL_Driver/Inc/py32f0xx_hal_def.h:
 Libraries/CMSIS/Device/PY32F0xx/Include/py32f0xx.h:
@@ -81,4 +82,4 @@ Libraries/PY32F0xx_HAL_Driver/Inc/py32f0xx_hal_pwr.h:
 Libraries/PY32F0xx_HAL_Driver/Inc/py32f0xx_hal_tim.h:
 Libraries/PY32F0xx_HAL_Driver/Inc/py32f0xx_hal_tim_ex.h:
 Libraries/PY32F0xx_HAL_Driver/Inc/py32f0xx_hal_uart.h:
-locknode_v5_4_2/py32f0xx_it.h:
+locknode_v5_4_2_lite/py32f0xx_it.h:
