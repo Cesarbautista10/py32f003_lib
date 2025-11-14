@@ -1,9 +1,9 @@
 Build/Libraries/PY32F0xx_HAL_BSP/Src/py32f0xx_bsp_led.o: \
  Libraries/PY32F0xx_HAL_BSP/Src/py32f0xx_bsp_led.c \
  Libraries/PY32F0xx_HAL_BSP/Inc/py32f0xx_bsp_led.h \
- locknode_v5_4_2_lite/py32f0xx_hal.h \
- locknode_v5_4_2_lite/py32f0xx_hal_conf.h \
- locknode_v5_4_2_lite/py32f0xx_hal.h \
+ locknode_v6_0_0_lite/py32f0xx_hal.h \
+ locknode_v6_0_0_lite/py32f0xx_hal_conf.h \
+ locknode_v6_0_0_lite/py32f0xx_hal.h \
  Libraries/PY32F0xx_HAL_Driver/Inc/py32f0xx_hal_rcc.h \
  Libraries/PY32F0xx_HAL_Driver/Inc/py32f0xx_hal_def.h \
  Libraries/CMSIS/Device/PY32F0xx/Include/py32f0xx.h \
@@ -39,9 +39,9 @@ Build/Libraries/PY32F0xx_HAL_BSP/Src/py32f0xx_bsp_led.o: \
  Libraries/PY32F0xx_HAL_Driver/Inc/py32f0xx_hal_tim_ex.h \
  Libraries/PY32F0xx_HAL_Driver/Inc/py32f0xx_hal_uart.h
 Libraries/PY32F0xx_HAL_BSP/Inc/py32f0xx_bsp_led.h:
-locknode_v5_4_2_lite/py32f0xx_hal.h:
-locknode_v5_4_2_lite/py32f0xx_hal_conf.h:
-locknode_v5_4_2_lite/py32f0xx_hal.h:
+locknode_v6_0_0_lite/py32f0xx_hal.h:
+locknode_v6_0_0_lite/py32f0xx_hal_conf.h:
+locknode_v6_0_0_lite/py32f0xx_hal.h:
 Libraries/PY32F0xx_HAL_Driver/Inc/py32f0xx_hal_rcc.h:
 Libraries/PY32F0xx_HAL_Driver/Inc/py32f0xx_hal_def.h:
 Libraries/CMSIS/Device/PY32F0xx/Include/py32f0xx.h:

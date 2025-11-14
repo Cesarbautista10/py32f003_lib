@@ -20,18 +20,27 @@
 #define I2C_ADDR_MIN       0x08         // Dirección mínima (evitar direcciones reservadas)
 #define I2C_ADDR_MAX       0x77         // Dirección máxima (evitar direcciones reservadas)
 
-// Comandos I2C (valores que recibe el dispositivo)
-#define CMD_RELAY_OFF      0x00         // Comando: Apagar RELÉ PB5
-#define CMD_RELAY_ON       0x01         // Comando: Encender RELÉ PB5
+// ═══════════════════════════════════════════════════════════
+//           COMANDOS CRÍTICOS DE SEGURIDAD (0xA0-0xAF)
+// ═══════════════════════════════════════════════════════════
+// RANGO SEPARADO: Comandos que controlan RELAY usan rango 0xA0-0xAF
+// para evitar confusión con comandos de lectura/status
+#define CMD_RELAY_OFF      0xA0         // Comando: Apagar RELÉ PB5 (SEGURIDAD)
+#define CMD_RELAY_ON       0xA1         // Comando: Encender RELÉ PB5 (SEGURIDAD)
+#define CMD_TOGGLE         0xA6         // Comando: Alternar estado de RELÉ PB5 (SEGURIDAD)
+
+// ═══════════════════════════════════════════════════════════
+//           COMANDOS DE LECTURA/STATUS (0x00-0x0F)
+// ═══════════════════════════════════════════════════════════
+#define CMD_PA4_DIGITAL    0x07         // Comando: Leer PA4 como entrada digital
+
+// ═══════════════════════════════════════════════════════════
+//           COMANDOS DE EFECTOS VISUALES (0x02-0x08)
+// ═══════════════════════════════════════════════════════════
 #define CMD_RED            0x02         // Comando: NeoPixels rojos
 #define CMD_GREEN          0x03         // Comando: NeoPixels verdes
 #define CMD_BLUE           0x04         // Comando: NeoPixels azules
 #define CMD_OFF            0x05         // Comando: NeoPixels apagados
-#define CMD_TOGGLE         0x06         // Comando: Alternar estado de RELÉ PB5
-// ═══════════════════════════════════════════════════════════
-//                      COMANDOS PA4 DIGITAL
-// ═══════════════════════════════════════════════════════════
-#define CMD_PA4_DIGITAL    0x07         // Comando: Leer PA4 como entrada digital
 #define CMD_WHITE          0x08         // Comando: NeoPixels blancos
 
 // Comandos PWM con frecuencias específicas
@@ -111,13 +120,16 @@
 
 // Códigos de respuesta para indicar el estado de la operación
 //  NUEVO PROTOCOLO: Solo bits inferiores (3-0), PA4 DIGITAL en bits superiores (7-4)
-#define RESP_RELAY_OFF     0x00         // RELÉ PB5 apagado exitosamente
-#define RESP_RELAY_ON      0x01         // RELÉ PB5 encendido exitosamente
+// RESPUESTAS CRÍTICAS DE SEGURIDAD (0xB0-0xBF) - Match con comandos 0xA0-0xAF
+#define RESP_RELAY_OFF     0xB0         // RELÉ PB5 apagado exitosamente
+#define RESP_RELAY_ON      0xB1         // RELÉ PB5 encendido exitosamente
+#define RESP_TOGGLE        0xB6         // RELÉ PB5 alternado exitosamente
+
+// RESPUESTAS DE EFECTOS VISUALES
 #define RESP_NEO_RED       0x02         // NeoPixels rojos activados
 #define RESP_NEO_GREEN     0x03         // NeoPixels verdes activados
 #define RESP_NEO_BLUE      0x04         // NeoPixels azules activados
 #define RESP_NEO_OFF       0x05         // NeoPixels apagados
-#define RESP_TOGGLE        0x06         // RELÉ PB5 alternado exitosamente
 #define RESP_PWM_SET       0x06         // PWM configurado exitosamente
 #define RESP_PWM_OFF       0x07         // PWM desactivado
 #define RESP_NEO_WHITE     0x08         // NeoPixels blancos activados
