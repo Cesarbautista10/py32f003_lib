@@ -570,36 +570,62 @@ int main(void)
   Init_ADC_PA0();                  //  Inicializar ADC en PA0 (12-bit)
   Init_Watchdog();                 //  Inicializar Watchdog Independiente (DESHABILITADO)
 
-  //  SONIDO DE ARRANQUE: Secuencia elegante tipo Windows/Mac
+  // ═══════════════════════════════════════════════════════════
+  //         SECUENCIA DE VALIDACIÓN DE ARRANQUE (BEEP-BEEP)
+  // ═══════════════════════════════════════════════════════════
   NEO_clearAll();
   
-  // Nueva secuencia de arranque estilo "Arturito" (R2-D2) con tonos cortos y rápidos
-  PWM_Set_Frequency(1200); HAL_Delay(80);   // Tono agudo corto
-  PWM_Set_Frequency(900);  HAL_Delay(60);   // Tono medio-agudo corto
-  PWM_Set_Frequency(1500); HAL_Delay(70);   // Tono más agudo
-  PWM_Set_Frequency(700);  HAL_Delay(50);   // Tono grave corto
-  PWM_Set_Frequency(1800); HAL_Delay(90);   // Tono muy agudo
-  PWM_Stop();              HAL_Delay(30);   // Pausa breve (silencio)
-  PWM_Set_Frequency(1200); HAL_Delay(60);   // Tono agudo corto
-  PWM_Set_Frequency(900);  HAL_Delay(60);   // Tono medio-agudo corto
-
-  // Tono de éxito + NeoPixel azul = sistema en línea
-  PWM_Set_Frequency(800);  // CMD_SUCCESS
+  // 1. BEEP-BEEP: Dos tonos cortos para validar PWM/Buzzer
+  PWM_Set_Frequency(1000); HAL_Delay(150);  // BEEP 1
+  PWM_Stop();              HAL_Delay(100);  // Pausa
+  PWM_Set_Frequency(1000); HAL_Delay(150);  // BEEP 2
+  PWM_Stop();              HAL_Delay(200);  // Pausa antes de siguiente paso
+  
+  // 2. NEOPIXELS: Ciclo rápido de colores para validar NeoPixels
+  // Rojo
   for (int i = 0; i < NEO_COUNT; i++) {
-    NEO_writeColor(i, 0, 0, 150);    // Azul = Sistema en línea
+    NEO_writeColor(i, 255, 0, 0);
   }
   NEO_update();
-  HAL_Delay(500);
+  HAL_Delay(300);
   
-  // Apagar PWM y mantener azul por 1 segundo más
-  TIM1->CCR3 = 0;                    
-  TIM1->CCER &= ~(1 << 8);           
-  TIM1->CR1 &= ~(1 << 0);            
-  HAL_Delay(1000);
+  // Verde
+  for (int i = 0; i < NEO_COUNT; i++) {
+    NEO_writeColor(i, 0, 255, 0);
+  }
+  NEO_update();
+  HAL_Delay(300);
+  
+  // Azul
+  for (int i = 0; i < NEO_COUNT; i++) {
+    NEO_writeColor(i, 0, 0, 255);
+  }
+  NEO_update();
+  HAL_Delay(300);
+  
+  // Blanco
+  for (int i = 0; i < NEO_COUNT; i++) {
+    NEO_writeColor(i, 128, 128, 128);
+  }
+  NEO_update();
+  HAL_Delay(300);
+  
+  // 3. RELÉ: Activación rápida para validar relé
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_SET);   // Encender relé
+  HAL_Delay(200);
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_RESET); // Apagar relé
+  HAL_Delay(200);
+  
+  // 4. TONO DE ÉXITO: Confirmación final de arranque exitoso
+  PWM_Set_Frequency(1500); HAL_Delay(100);  // Tono agudo
+  PWM_Set_Frequency(1200); HAL_Delay(100);  // Tono medio
+  PWM_Set_Frequency(1500); HAL_Delay(200);  // Tono agudo sostenido
+  PWM_Stop();
   
   // Apagar NeoPixels - arranque completado
   NEO_clearAll();
   NEO_update();
+  HAL_Delay(300);
 
   __HAL_RCC_I2C_FORCE_RESET();
   __HAL_RCC_I2C_RELEASE_RESET();
@@ -768,19 +794,19 @@ int main(void)
       // ═══════════════════════════════════════════════════════════
       
       // Comandos básicos RELÉ y NeoPixels
-      else if (aRxBuffer[0] == CMD_RELAY_ON)  // 0x01: RELÉ ON - Encender RELÉ en PB5
+      else if (aRxBuffer[0] == CMD_RELAY_ON)  // 0xA1: RELÉ ON - Encender RELÉ en PB5 (SEGURIDAD)
       {
         HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_SET);  // Encender RELÉ PB5
         response_code = RESP_RELAY_ON;
       }
-      else if (aRxBuffer[0] == CMD_TOGGLE )  // 0x06: RELÉ TOGGLE - Alternar RELÉ en PB5
+      else if (aRxBuffer[0] == CMD_TOGGLE )  // 0xA6: RELÉ TOGGLE - Alternar RELÉ en PB5 (SEGURIDAD)
       {
         HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_SET);  // Encender RELÉ PB5
         HAL_Delay(25);  // Esperar 100 ms
         HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_RESET);  // Apagar RELÉ PB5
         response_code = RESP_TOGGLE;
       }
-      else if (aRxBuffer[0] == CMD_RELAY_OFF)  // 0x00: RELÉ OFF - Apagar RELÉ en PB5
+      else if (aRxBuffer[0] == CMD_RELAY_OFF)  // 0xA0: RELÉ OFF - Apagar RELÉ en PB5 (SEGURIDAD)
       {
         HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_RESET);  // Apagar RELÉ PB5
         response_code = RESP_RELAY_OFF;
@@ -855,6 +881,23 @@ int main(void)
         system_stable = 1;
         
         response_code = RESP_NEO_OFF;
+      }
+      else if (aRxBuffer[0] == CMD_WHITE)  // 0x08: NeoPixels blancos
+      {
+        //  PROTECCIÓN: Similar a otros comandos NeoPixel
+        Refresh_Watchdog();
+        
+        for (int i = 0; i < NEO_COUNT; i++) {
+          NEO_writeColor(i, 128, 128, 128);
+          HAL_Delay(1);
+        }
+        
+        Refresh_Watchdog();
+        NEO_update();
+        HAL_Delay(5);
+        Refresh_Watchdog();
+        
+        response_code = RESP_NEO_WHITE;
       }
       
       //  COMANDO PA4 DIGITAL
