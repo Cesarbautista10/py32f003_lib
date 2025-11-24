@@ -571,61 +571,46 @@ int main(void)
   Init_Watchdog();                 //  Inicializar Watchdog Independiente (DESHABILITADO)
 
   // ═══════════════════════════════════════════════════════════
-  //         SECUENCIA DE VALIDACIÓN DE ARRANQUE (BEEP-BEEP)
+  //         SECUENCIA DE VALIDACIÓN RÁPIDA DE ARRANQUE
   // ═══════════════════════════════════════════════════════════
   NEO_clearAll();
   
-  // 1. BEEP-BEEP: Dos tonos cortos para validar PWM/Buzzer
-  PWM_Set_Frequency(1000); HAL_Delay(150);  // BEEP 1
-  PWM_Stop();              HAL_Delay(100);  // Pausa
-  PWM_Set_Frequency(1000); HAL_Delay(150);  // BEEP 2
-  PWM_Stop();              HAL_Delay(200);  // Pausa antes de siguiente paso
+  // 1. BEEP: Un tono corto para validar PWM/Buzzer
+  PWM_Set_Frequency(1200); HAL_Delay(100);  // BEEP
+  PWM_Stop();              HAL_Delay(50);   // Pausa corta
   
-  // 2. NEOPIXELS: Ciclo rápido de colores para validar NeoPixels
-  // Rojo
-  for (int i = 0; i < NEO_COUNT; i++) {
-    NEO_writeColor(i, 255, 0, 0);
-  }
-  NEO_update();
-  HAL_Delay(300);
-  
-  // Verde
-  for (int i = 0; i < NEO_COUNT; i++) {
-    NEO_writeColor(i, 0, 255, 0);
-  }
-  NEO_update();
-  HAL_Delay(300);
-  
-  // Azul
-  for (int i = 0; i < NEO_COUNT; i++) {
-    NEO_writeColor(i, 0, 0, 255);
-  }
-  NEO_update();
-  HAL_Delay(300);
-  
-  // Blanco
-  for (int i = 0; i < NEO_COUNT; i++) {
-    NEO_writeColor(i, 128, 128, 128);
-  }
-  NEO_update();
-  HAL_Delay(300);
-  
-  // 3. RELÉ: Activación rápida para validar relé
+  // 2. RELÉ: Activación rápida para validar relé
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_SET);   // Encender relé
-  HAL_Delay(200);
+  HAL_Delay(100);
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_RESET); // Apagar relé
-  HAL_Delay(200);
+  HAL_Delay(50);
   
-  // 4. TONO DE ÉXITO: Confirmación final de arranque exitoso
-  PWM_Set_Frequency(1500); HAL_Delay(100);  // Tono agudo
-  PWM_Set_Frequency(1200); HAL_Delay(100);  // Tono medio
-  PWM_Set_Frequency(1500); HAL_Delay(200);  // Tono agudo sostenido
+  // 3. LECTURA PA4: Determinar color según estado de PA4
+  Read_PA4_Digital();  // Leer estado de PA4
+  
+  if (pa4_digital_state == 1) {
+    // PA4 en ALTO: NeoPixels VERDE
+    for (int i = 0; i < NEO_COUNT; i++) {
+      NEO_writeColor(i, 0, 255, 0);
+    }
+    NEO_update();
+    PWM_Set_Frequency(1500); HAL_Delay(100);  // Tono agudo = OK
+  } else {
+    // PA4 en BAJO: NeoPixels ROJO
+    for (int i = 0; i < NEO_COUNT; i++) {
+      NEO_writeColor(i, 255, 0, 0);
+    }
+    NEO_update();
+    PWM_Set_Frequency(800); HAL_Delay(100);   // Tono grave = Advertencia
+  }
   PWM_Stop();
+  
+  // Mantener el color indicador por 500ms
+  HAL_Delay(500);
   
   // Apagar NeoPixels - arranque completado
   NEO_clearAll();
   NEO_update();
-  HAL_Delay(300);
 
   __HAL_RCC_I2C_FORCE_RESET();
   __HAL_RCC_I2C_RELEASE_RESET();
