@@ -1,0 +1,16 @@
+# Dependencias para LockNode Agent
+# Instalar con: pip install -r requirements.txt
+
+# Framework web
+Flask==3.0.0
+flask-cors==4.0.0
+
+# Comunicación serial (opcional, descomentar si se usa)
+# pyserial==3.5
+
+# Detección de dispositivos USB CMSIS-DAP
+pyusb==1.2.1
+pyocd==0.36.0
+
+# Utilidades adicionales
+python-dateutil==2.8.2
