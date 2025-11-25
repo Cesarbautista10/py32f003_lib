@@ -618,7 +618,7 @@ int main(void)
 
 
   Init_i2c_pins();
-  PWM_Init_TIM3();                 //  Inicializar PWM en PB6 (TIM1_CH3)
+  PWM_Init_TIM1();                 //  Inicializar PWM en PB6 (TIM1_CH3)
   Init_PA0_Digital();              //  Inicializar PA0 como entrada digital
   Init_ADC_PA1();                  //  Inicializar ADC en PA1 (12-bit)
   Init_Watchdog();                 //  Inicializar Watchdog Independiente (DESHABILITADO)

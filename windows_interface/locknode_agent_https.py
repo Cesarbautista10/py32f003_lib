@@ -105,26 +105,58 @@ def execute_command():
 
 @app.route('/api/locknode/upload-firmware', methods=['POST'])
 def upload_firmware():
-    """Carga firmware al dispositivo LockNode"""
+    """Recibe y guarda un archivo de firmware en el directorio local"""
     try:
-        data = request.json
-        logger.info(f"Iniciando carga de firmware. Timestamp: {data.get('timestamp')}")
+        # Verificar que se envió un archivo
+        if 'firmware' not in request.files:
+            return jsonify({
+                'success': False,
+                'error': 'No se encontró el archivo en la petición'
+            }), 400
         
-        agent_state['firmware_status'] = 'uploading'
+        file = request.files['firmware']
         
-        agent_state['firmware_status'] = 'uploaded'
+        # Verificar que el archivo tiene nombre
+        if file.filename == '':
+            return jsonify({
+                'success': False,
+                'error': 'No se seleccionó ningún archivo'
+            }), 400
+        
+        # Verificar que es un archivo .bin
+        if not file.filename.endswith('.bin'):
+            return jsonify({
+                'success': False,
+                'error': 'Solo se permiten archivos .bin'
+            }), 400
+        
+        # Crear el directorio firmware si no existe
+        firmware_dir = os.path.join(os.path.dirname(__file__), 'firmware')
+        os.makedirs(firmware_dir, exist_ok=True)
+        
+        # Guardar el archivo
+        filepath = os.path.join(firmware_dir, file.filename)
+        file.save(filepath)
+        
+        file_size = os.path.getsize(filepath)
+        
+        logger.info(f"Firmware subido: {file.filename} ({file_size} bytes)")
         
         return jsonify({
             'success': True,
-            'message': 'Firmware cargado exitosamente al dispositivo (HTTPS)',
-            'timestamp': datetime.now().isoformat(),
-            'firmware_version': '1.2.3',
-            'bytes_uploaded': 245760
+            'message': f'Firmware "{file.filename}" subido exitosamente',
+            'filename': file.filename,
+            'size_bytes': file_size,
+            'size_kb': round(file_size / 1024, 2),
+            'path': filepath
         }), 200
+        
     except Exception as e:
-        logger.error(f"Error al cargar firmware: {str(e)}")
-        agent_state['firmware_status'] = 'error'
-        return jsonify({'success': False, 'error': str(e)}), 500
+        logger.error(f"Error al subir firmware: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'Error al guardar el archivo: {str(e)}'
+        }), 500
 
 @app.route('/api/locknode/download-firmware', methods=['POST'])
 def download_firmware():
@@ -356,6 +388,63 @@ def list_firmware_files():
             'success': False,
             'error': str(e),
             'files': []
+        }), 500
+
+@app.route('/api/locknode/firmware/delete', methods=['POST'])
+def delete_firmware():
+    """Elimina un archivo de firmware del directorio firmware/"""
+    try:
+        import os
+        
+        data = request.json
+        filename = data.get('filename')
+        
+        if not filename:
+            return jsonify({
+                'success': False,
+                'error': 'No se especificó el nombre del archivo'
+            }), 400
+        
+        # Verificar que es un archivo .bin
+        if not filename.endswith('.bin'):
+            return jsonify({
+                'success': False,
+                'error': 'Solo se pueden eliminar archivos .bin'
+            }), 400
+        
+        firmware_dir = os.path.join(os.path.dirname(__file__), 'firmware')
+        file_path = os.path.join(firmware_dir, filename)
+        
+        # Verificar que el archivo existe
+        if not os.path.exists(file_path):
+            return jsonify({
+                'success': False,
+                'error': f'El archivo "{filename}" no existe'
+            }), 404
+        
+        # Verificar que el archivo está dentro del directorio firmware/
+        if not os.path.abspath(file_path).startswith(os.path.abspath(firmware_dir)):
+            return jsonify({
+                'success': False,
+                'error': 'Ruta de archivo no válida'
+            }), 403
+        
+        # Eliminar el archivo
+        os.remove(file_path)
+        
+        logger.info(f"Firmware eliminado: {filename}")
+        
+        return jsonify({
+            'success': True,
+            'message': f'Firmware "{filename}" eliminado exitosamente',
+            'filename': filename
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error al eliminar firmware: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'Error al eliminar el archivo: {str(e)}'
         }), 500
 
 @app.route('/api/locknode/firmware/program', methods=['POST'])
