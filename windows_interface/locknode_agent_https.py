@@ -17,6 +17,7 @@ from flask_cors import CORS
 from datetime import datetime
 import logging
 import os
+import socket
 
 # Configuración del servidor
 app = Flask(__name__)
@@ -221,13 +222,32 @@ def connect_device():
         logger.error(f"Error al conectar dispositivo: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
+def get_local_ip():
+    """Obtiene la IP local del dispositivo"""
+    try:
+        # Crear un socket para determinar la IP local
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        # No necesita conectarse realmente, solo determinar la ruta
+        s.connect(("8.8.8.8", 80))
+        local_ip = s.getsockname()[0]
+        s.close()
+        return local_ip
+    except Exception:
+        # Si falla, intentar con hostname
+        try:
+            hostname = socket.gethostname()
+            local_ip = socket.gethostbyname(hostname)
+            return local_ip
+        except:
+            return "N/A"
+
 def check_ssl_certificates():
     """Verifica si existen los certificados SSL"""
     cert_file = 'certs/cert.pem'
     key_file = 'certs/key.pem'
     
     if not os.path.exists(cert_file) or not os.path.exists(key_file):
-        print("⚠️  CERTIFICADOS SSL NO ENCONTRADOS")
+        print("  CERTIFICADOS SSL NO ENCONTRADOS")
         print("=" * 60)
         print("Para generar certificados de desarrollo, ejecuta:")
         print()
@@ -582,31 +602,36 @@ def program_firmware():
 
 if __name__ == '__main__':
     print("=" * 60)
-    print("🚀 Agente Local LockNode iniciado (HTTPS)")
+    print("Agente Local LockNode iniciado (HTTPS)")
     print("=" * 60)
     
     # Verificar certificados SSL
     if check_ssl_certificates():
-        print(f"📡 Acceso local:  https://localhost:8081")
-        print(f"� Acceso red:    https://<tu-ip>:8081")
-        print(f"�🔒 Conexión segura SSL/TLS habilitada")
-        print(f"🔗 Esperando conexión del panel web...")
+        # Obtener IP local del dispositivo
+        local_ip = get_local_ip()
+        port = 8081
+        
+        print(f" Acceso local:  https://localhost:{port}")
+        print(f" Acceso red:    https://{local_ip}:{port}")
+        print(f" Conexión segura SSL/TLS habilitada")
+        print(f" Esperando conexión del panel web...")
         print("=" * 60)
-        print("💡 Configura el Host/IP en el panel web:")
-        print("   - Usa 'localhost' para acceso local")
-        print("   - Usa tu IP de red (ej: 192.168.15.91) para acceso desde otros dispositivos")
-        print("⚠️  IMPORTANTE: Debes aceptar el certificado autofirmado en el navegador")
+        print(" Configura el Host/IP en el panel web:")
+        print(f"   - Local:  localhost  (Puerto: {port})")
+        print(f"   - Red:    {local_ip}  (Puerto: {port})")
+        print()
+        print("  IMPORTANTE: Debes aceptar el certificado autofirmado en el navegador")
         print("=" * 60)
         
         # Iniciar el servidor Flask con HTTPS
         app.run(
             host='0.0.0.0',
-            port=8081,
+            port=port,
             debug=True,
             ssl_context=('certs/cert.pem', 'certs/key.pem')  # Usar certificados SSL
         )
     else:
         print()
-        print("❌ No se puede iniciar el servidor sin certificados SSL")
+        print(" No se puede iniciar el servidor sin certificados SSL")
         print("   Genera los certificados y vuelve a intentarlo")
         print("=" * 60)
