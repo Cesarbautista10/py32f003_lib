@@ -1,7 +1,7 @@
 Build/Libraries/PY32F0xx_HAL_Driver/Src/py32f0xx_hal_wwdg.o: \
  Libraries/PY32F0xx_HAL_Driver/Src/py32f0xx_hal_wwdg.c \
- devlab_v6_0_0_lite/py32f0xx_hal.h devlab_v6_0_0_lite/py32f0xx_hal_conf.h \
- devlab_v6_0_0_lite/py32f0xx_hal.h \
+ i2c_slave/py32f0xx_hal.h i2c_slave/py32f0xx_hal_conf.h \
+ i2c_slave/py32f0xx_hal.h \
  Libraries/PY32F0xx_HAL_Driver/Inc/py32f0xx_hal_rcc.h \
  Libraries/PY32F0xx_HAL_Driver/Inc/py32f0xx_hal_def.h \
  Libraries/CMSIS/Device/PY32F0xx/Include/py32f0xx.h \
@@ -36,9 +36,9 @@ Build/Libraries/PY32F0xx_HAL_Driver/Src/py32f0xx_hal_wwdg.o: \
  Libraries/PY32F0xx_HAL_Driver/Inc/py32f0xx_hal_tim.h \
  Libraries/PY32F0xx_HAL_Driver/Inc/py32f0xx_hal_tim_ex.h \
  Libraries/PY32F0xx_HAL_Driver/Inc/py32f0xx_hal_uart.h
-devlab_v6_0_0_lite/py32f0xx_hal.h:
-devlab_v6_0_0_lite/py32f0xx_hal_conf.h:
-devlab_v6_0_0_lite/py32f0xx_hal.h:
+i2c_slave/py32f0xx_hal.h:
+i2c_slave/py32f0xx_hal_conf.h:
+i2c_slave/py32f0xx_hal.h:
 Libraries/PY32F0xx_HAL_Driver/Inc/py32f0xx_hal_rcc.h:
 Libraries/PY32F0xx_HAL_Driver/Inc/py32f0xx_hal_def.h:
 Libraries/CMSIS/Device/PY32F0xx/Include/py32f0xx.h:
