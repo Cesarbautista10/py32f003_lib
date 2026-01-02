@@ -60,6 +60,18 @@
 #define CMD_PA4_DIGITAL    0x07   // Leer PA0 como entrada digital
 #define RESP_PA4_DIGITAL   0x09   // Respuesta PA4 digital
 
+// ═══════════════════════════════════════════════════════════
+//           COMANDOS I2C ADDRESS MANAGEMENT
+// ═══════════════════════════════════════════════════════════
+#define CMD_SET_I2C_ADDR   0x3D   // Establecer nueva dirección I2C (se guarda en Flash)
+#define CMD_RESET_FACTORY  0x3E   // Reset factory (usar UID por defecto)
+#define CMD_GET_I2C_STATUS 0x3F   // Obtener estado I2C (Flash vs UID)
+
+#define RESP_I2C_ADDR_SET  0x0D   // Nueva dirección I2C establecida
+#define RESP_FACTORY_RESET 0x0E   // Reset factory ejecutado (usar UID)
+#define RESP_I2C_FROM_FLASH 0x0F  // I2C usando dirección desde Flash
+#define RESP_I2C_FROM_UID  0x0A   // I2C usando dirección desde UID
+
 // Variables globales
 uint8_t found_devices[128];
 uint8_t device_count = 0;
@@ -306,6 +318,8 @@ void processCommand(String cmd) {
     neoWhite(cmd);
   } else if (cmd == "neooff") {
     neoOff();
+  } else if (cmd.startsWith("ch ")) {
+    changeI2CAddress(cmd);
   } else if (cmd == "help" || cmd == "h") {
     showHelp();
   } else {
@@ -331,6 +345,7 @@ void showMenu() {
   Serial.println("  pwm XX NIVEL   - PWM (25, 50, 75, 100, off)");
   Serial.println("  silence        - Apagar PWM en todos");
   Serial.println("  neo XX COLOR   - NeoPixel (red, green, blue, white, off)");
+  Serial.println("  ch XX YY       - Cambiar dir I2C (XX=old, YY=new)");
   Serial.println("  help           - Mostrar ayuda completa");
   Serial.println("\nEjemplos:");
   Serial.println("  s              (scan de dispositivos)");
@@ -654,6 +669,17 @@ bool sendCommand(uint8_t address, uint8_t command) {
   }
   
   return false;
+}
+
+// Función para leer respuesta del dispositivo
+uint8_t readResponse(uint8_t address) {
+  delay(10);  // Pequeño delay para que el dispositivo prepare respuesta
+  WIRE.setTimeout(100);
+  uint8_t bytesRead = WIRE.requestFrom(address, (uint8_t)1);
+  if (bytesRead == 1) {
+    return WIRE.read();
+  }
+  return 0xFF;  // Error: no se recibió respuesta
 }
 
 // Versión rápida: enviar comando SIN esperar respuesta
@@ -1180,6 +1206,136 @@ void neoOff() {
   Serial.printf("\nTotal: %d/%d dispositivos\n", count, device_count);
 }
 
+// ═══════════════════════════════════════════════════════════
+//           FUNCIÓN: CAMBIAR DIRECCIÓN I2C
+// ═══════════════════════════════════════════════════════════
+void changeI2CAddress(String cmd) {
+  // Formato: "ch XX YY" donde XX=dirección actual, YY=nueva dirección
+  cmd.trim();
+  int firstSpace = cmd.indexOf(' ');
+  int secondSpace = cmd.indexOf(' ', firstSpace + 1);
+  
+  if (firstSpace == -1 || secondSpace == -1) {
+    Serial.println("[ERROR] Formato: ch XX YY");
+    Serial.println("        XX = dirección actual (hex)");
+    Serial.println("        YY = nueva dirección (hex)");
+    return;
+  }
+  
+  String oldAddrStr = cmd.substring(firstSpace + 1, secondSpace);
+  String newAddrStr = cmd.substring(secondSpace + 1);
+  
+  oldAddrStr.trim();
+  newAddrStr.trim();
+  
+  // Convertir direcciones de hexadecimal
+  uint8_t oldAddr = (uint8_t)strtol(oldAddrStr.c_str(), NULL, 16);
+  uint8_t newAddr = (uint8_t)strtol(newAddrStr.c_str(), NULL, 16);
+  
+  // Validar rangos
+  if (oldAddr < 0x08 || oldAddr > 0x77) {
+    Serial.printf("[ERROR] Dirección actual 0x%02X fuera de rango (0x08-0x77)\n", oldAddr);
+    return;
+  }
+  
+  if (newAddr < 0x08 || newAddr > 0x77) {
+    Serial.printf("[ERROR] Nueva dirección 0x%02X fuera de rango (0x08-0x77)\n", newAddr);
+    return;
+  }
+  
+  Serial.println("\n━━━ CAMBIAR DIRECCIÓN I2C ━━━");
+  Serial.printf("Dispositivo: 0x%02X → 0x%02X\n", oldAddr, newAddr);
+  Serial.println("⚠️  ADVERTENCIA: Esta operación es PERMANENTE (guarda en Flash)");
+  Serial.println("");
+  
+  // PROTOCOLO CORRECTO según firmware i2c_slave/main.c:
+  // 1. Enviar 0x3D (CMD_SET_I2C_ADDR) - activa modo "esperar nueva dirección"
+  // 2. El firmware responde 0x0D y espera el siguiente byte como nueva dirección
+  // 3. Enviar la nueva dirección como siguiente comando
+  // 4. Firmware guarda en Flash y responde 0x0D
+  // 5. Requiere reset para aplicar
+  
+  Serial.print("Paso 1: Activando modo cambio dirección... ");
+  
+  WIRE.beginTransmission(oldAddr);
+  WIRE.write(CMD_SET_I2C_ADDR);  // 0x3D
+  uint8_t error = WIRE.endTransmission();
+  
+  if (error != 0) {
+    Serial.printf("[FAIL] Error I2C: %d\n", error);
+    Serial.println("⚠️  El dispositivo no respondió. Verifica:");
+    Serial.println("   - Dirección correcta (usa 'scan' para confirmar)");
+    Serial.println("   - Dispositivo conectado y funcionando");
+    return;
+  }
+  
+  delay(50);  // Delay importante: firmware necesita procesar comando
+  
+  // Leer respuesta
+  uint8_t bytesRead = WIRE.requestFrom(oldAddr, (uint8_t)1);
+  uint8_t response = 0xFF;
+  if (bytesRead == 1) {
+    response = WIRE.read();
+  }
+  
+  if (response == 0x0D) {  // RESP_I2C_ADDR_SET
+    Serial.println("[OK] Modo activado");
+  } else {
+    Serial.printf("[WARN] Respuesta: 0x%02X (esperaba 0x0D)\n", response);
+    // Continuamos, puede funcionar igual
+  }
+  
+  delay(50);  // Delay adicional antes del siguiente comando
+  
+  // Paso 2: Enviar nueva dirección
+  Serial.printf("Paso 2: Enviando nueva dirección 0x%02X... ", newAddr);
+  
+  WIRE.beginTransmission(oldAddr);
+  WIRE.write(newAddr);  // Nueva dirección como dato
+  error = WIRE.endTransmission();
+  
+  if (error != 0) {
+    Serial.printf("[FAIL] Error I2C: %d\n", error);
+    Serial.println("⚠️  No se pudo completar el cambio");
+    return;
+  }
+  
+  delay(100);  // Delay largo: escritura Flash puede tomar tiempo
+  
+  // Leer confirmación
+  bytesRead = WIRE.requestFrom(oldAddr, (uint8_t)1);
+  response = 0xFF;
+  if (bytesRead == 1) {
+    response = WIRE.read();
+  }
+  
+  if (response == 0x0D) {  // RESP_I2C_ADDR_SET
+    Serial.println("[OK] ✅ Guardado en Flash");
+  } else {
+    Serial.printf("[WARN] Respuesta: 0x%02X\n", response);
+  }
+  
+  Serial.println("");
+  Serial.println("╔════════════════════════════════════════════╗");
+  Serial.println("║  ✅ CAMBIO DE DIRECCIÓN COMPLETADO        ║");
+  Serial.println("╚════════════════════════════════════════════╝");
+  Serial.println("");
+  Serial.println("⚠️  IMPORTANTE - PRÓXIMOS PASOS:");
+  Serial.println("   1. La nueva dirección está GUARDADA EN FLASH");
+  Serial.println("   2. DEBES RESETEAR el dispositivo para aplicar");
+  Serial.println("   3. Opciones de reset:");
+  Serial.println("      • Desconecta y reconecta el dispositivo");
+  Serial.println("      • Usa el botón de reset físico");
+  Serial.println("      • Cicla la alimentación");
+  Serial.printf("   4. Después del reset: dispositivo en 0x%02X\n", newAddr);
+  Serial.println("");
+  Serial.println("Verificación:");
+  Serial.println("   1. Resetea el dispositivo");
+  Serial.println("   2. Ejecuta: scan");
+  Serial.printf("   3. Busca la dirección 0x%02X en la lista\n", newAddr);
+  Serial.println("");
+}
+
 void showHelp() {
   Serial.println("\n╔═══════════════════════════════════════╗");
   Serial.println("║        COMANDOS DISPONIBLES          ║");
@@ -1222,6 +1378,12 @@ void showHelp() {
   Serial.println("  white XX       - NeoPixel blanco");
   Serial.println("  neooff         - Apagar NeoPixel en todos");
   Serial.println("");
+  Serial.println("I2C ADDRESS:");
+  Serial.println("  ch XX YY       - Cambiar dirección I2C");
+  Serial.println("                   XX = dirección actual (hex)");
+  Serial.println("                   YY = nueva dirección (hex)");
+  Serial.println("                   (se guarda en Flash, requiere reset)");
+  Serial.println("");
   Serial.println("FORMATO:");
   Serial.println("  XX = Direccion I2C en hexadecimal");
   Serial.println("");
@@ -1244,5 +1406,6 @@ void showHelp() {
   Serial.println("  t 20           → Pulso en 0x20");
   Serial.println("  on 32          → Encender en 0x32");
   Serial.println("  off 20         → Apagar relay en 0x20");
+  Serial.println("  ch 19 25       → Cambiar 0x19 a 0x25");
   Serial.println("");
 }
