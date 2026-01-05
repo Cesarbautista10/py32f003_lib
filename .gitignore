@@ -1,0 +1,17 @@
+# Build artifacts
+Build/*.bin
+Build/*.elf
+Build/*.hex
+Build/*.lst
+Build/*.map
+Build/*/
+
+# Editor and IDE files
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
