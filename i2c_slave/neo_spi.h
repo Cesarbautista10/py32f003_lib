@@ -44,7 +44,7 @@ extern "C" {
 // ===================================================================================
 // NeoPixel Definitions
 // ===================================================================================
-#define NEO_MAP         0    // MOSI pin mapping: 0=PA1
+#define NEO_MAP         5    // MOSI pin mapping: 5=PA12
 #define NEO_GRB               // type of pixels: NEO_GRB or NEO_RGB
 #define NEO_COUNT       8   // total number of pixels in the string (optimized for >10)
 #define NEO_LATCH_TIME  50    // reduced latch time for better performance

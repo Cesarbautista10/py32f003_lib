@@ -1,14 +1,14 @@
 /**
  * ═══════════════════════════════════════════════════════════════════════════════════════
  * @file    pwm_control.h
- * @brief   Control PWM para PY32F003 - TIM3_CH1 en PA2
- * @version v5.3
- * @date    Diciembre 2024
+ * @brief   Control PWM para PY32F003 - TIM1_CH3 en PB6
+ * @version v5.4
+ * @date    Enero 2026
  * @author  Refactorización modular con IA
  * @mcu     PY32F003F18
  * ═══════════════════════════════════════════════════════════════════════════════════════
  * FUNCIONALIDAD:
- * - Control de PWM usando TIM3_CH1 en pin PA2
+ * - Control de PWM usando TIM1_CH3 en pin PB6
  * - Generación de tonos audibles para buzzer
  * - Configuración de frecuencia variable (100Hz - 2000Hz)
  * - Control de duty cycle y habilitación/deshabilitación
@@ -22,11 +22,11 @@
 #include <stdint.h>
 
 // PWM Configuration Constants
-#define PWM_GPIO_PORT           GPIOA               // Puerto GPIO para PWM
-#define PWM_GPIO_PIN            GPIO_PIN_2          // Pin PA2 para TIM3_CH1
-#define PWM_TIMER               TIM3                // Timer usado para PWM
-#define PWM_CHANNEL             1                   // Canal 1 de TIM3
-#define PWM_GPIO_AF             0x0D                // Función alternativa AF13 para TIM3_CH1
+#define PWM_GPIO_PORT           GPIOB               // Puerto GPIO para PWM
+#define PWM_GPIO_PIN            GPIO_PIN_6          // Pin PB6 para TIM1_CH3
+#define PWM_TIMER               TIM1                // Timer usado para PWM
+#define PWM_CHANNEL             3                   // Canal 3 de TIM1
+#define PWM_GPIO_AF             0x01                // Función alternativa AF1 para TIM1_CH3
 
 // PWM Frequency Limits
 #define PWM_FREQ_MIN            100                 // Frecuencia mínima 100Hz
@@ -37,7 +37,7 @@
 #define PWM_SYSTEM_CLOCK        24000000            // 24MHz sistema clock
 
 // Function Declarations
-void PWM_Init_TIM1(void);                          // Initialize PWM on TIM3_CH1
+void PWM_Init_TIM1(void);                          // Initialize PWM on TIM1_CH3
 void PWM_Set_Frequency(uint16_t frequency_hz);     // Set PWM frequency
 void PWM_Set_Duty_Cycle(uint16_t duty_percent);    // Set PWM duty cycle (0-100%)
 void PWM_Enable(void);                             // Enable PWM output

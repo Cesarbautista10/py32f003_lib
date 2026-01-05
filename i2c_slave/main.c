@@ -44,6 +44,7 @@ static void Pulse_Relays(void);
 static void Process_Relay_Pulse(void);    
 static void Init_PA0_Digital(void);       
 static void Read_PA0_Digital(void);       
+static void Init_PF4_LED(void);            // LED builtin en PF4
 static void Process_I2C_Command(void);
 static uint8_t Build_Response_With_PA0(uint8_t base_response);  
 static void I2C_Recovery(void);
@@ -152,41 +153,84 @@ void Reset_To_Factory_I2C(void)
 static void Init_i2c_pins(void)
 {
   GPIO_InitTypeDef GPIO_InitStruct = {0};
-  __HAL_RCC_GPIOA_CLK_ENABLE();
-  __HAL_RCC_GPIOB_CLK_ENABLE();
+  
+  // Habilitar relojes para I2C
+  __HAL_RCC_GPIOF_CLK_ENABLE();                    //  MIGRADO: PF0/PF1 SÍ tienen I2C con AF12
   __HAL_RCC_I2C_CLK_ENABLE();
-  GPIO_InitStruct.Pin = GPIO_PIN_6;
-  GPIO_InitStruct.Mode = GPIO_MODE_AF_OD;          
-  GPIO_InitStruct.Pull = GPIO_PULLUP;              
+
+  //  MIGRADO: Configurar PF0 como SDA (I2C_SDA) - AF12 CONFIRMADO
+  GPIO_InitStruct.Pin = GPIO_PIN_0;                // PF0 - SDA (AF12)
+  GPIO_InitStruct.Mode = GPIO_MODE_AF_OD;          // Open Drain para I2C
+  GPIO_InitStruct.Pull = GPIO_PULLUP;              // Pull-up interno
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
-  GPIO_InitStruct.Alternate = GPIO_AF6_I2C;        
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-  GPIO_InitStruct.Pin = GPIO_PIN_10;
-  GPIO_InitStruct.Mode = GPIO_MODE_AF_OD;          
-  GPIO_InitStruct.Pull = GPIO_PULLUP;              
+  GPIO_InitStruct.Alternate = GPIO_AF12_I2C;       //  AF12 para PF0/PF1 I2C (CONFIRMADO)
+  HAL_GPIO_Init(GPIOF, &GPIO_InitStruct);
+
+  //  MIGRADO: Configurar PF1 como SCL (I2C_SCL) - AF12 CONFIRMADO
+  GPIO_InitStruct.Pin = GPIO_PIN_1;                // PF1 - SCL (AF12)
+  GPIO_InitStruct.Mode = GPIO_MODE_AF_OD;          // Open Drain para I2C
+  GPIO_InitStruct.Pull = GPIO_PULLUP;              // Pull-up interno
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
-  GPIO_InitStruct.Alternate = GPIO_AF6_I2C;       
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  GPIO_InitStruct.Alternate = GPIO_AF12_I2C;       //  AF12 para PF0/PF1 I2C (CONFIRMADO)
+  HAL_GPIO_Init(GPIOF, &GPIO_InitStruct);
 }
+//  FUNCIÓN: Inicializar PA4 como entrada digital
 static void Init_PA0_Digital(void)
 {
   GPIO_InitTypeDef GPIO_InitStruct = {0};
+  
+  // Habilitar reloj GPIOA
   __HAL_RCC_GPIOA_CLK_ENABLE();
-  GPIO_InitStruct.Pin = GPIO_PIN_0;              
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;        
-  GPIO_InitStruct.Pull = GPIO_PULLUP;            
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;   
+  
+  // Configurar PA4 como entrada digital con pull-up
+  GPIO_InitStruct.Pin = GPIO_PIN_4;              // PA4 - Pin digital (MIGRADO desde PA0)
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;        // Entrada digital
+  GPIO_InitStruct.Pull = GPIO_PULLUP;            // Pull-up interno para lectura estable
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;   // Velocidad baja para entrada
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  
+  // Marcar como inicializado
   pa0_initialized = 1;
+  
+  // Hacer primera lectura
   Read_PA0_Digital();
 }
+
+/**
+ * @brief  Inicializar LED builtin en PF4
+ * @note   PF4 como salida digital push-pull para LED de estado
+ */
+static void Init_PF4_LED(void)
+{
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+  
+  // Habilitar reloj GPIOF
+  __HAL_RCC_GPIOF_CLK_ENABLE();
+  
+  // Configurar PF4 como salida digital push-pull
+  GPIO_InitStruct.Pin = GPIO_PIN_4;              // PF4 - LED builtin
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;    // Salida push-pull
+  GPIO_InitStruct.Pull = GPIO_NOPULL;            // Sin pull resistor
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;   // Velocidad baja para LED
+  HAL_GPIO_Init(GPIOF, &GPIO_InitStruct);
+  
+  // Apagar LED inicialmente
+  HAL_GPIO_WritePin(GPIOF, GPIO_PIN_4, GPIO_PIN_RESET);
+}
+
+//  FUNCIÓN: Leer PA4 como entrada digital
 static void Read_PA0_Digital(void)
 {
+  // Asegurar que PA4 está configurado como digital
   if (pa0_initialized == 0) {
     Init_PA0_Digital();
   }
-  GPIO_PinState pin_state = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0);
+  
+  // Leer estado digital de PA4 (MIGRADO desde PA0)
+  GPIO_PinState pin_state = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_4);
   pa0_digital_state = (pin_state == GPIO_PIN_SET) ? 1 : 0;
+  
+  // Actualizar timestamp
   pa0_last_read = HAL_GetTick();
 }
 static void I2C_Recovery(void)
@@ -662,13 +706,19 @@ int main(void)
   HAL_Init();
   APP_SystemClockConfig();
   
-  Init_PA2_PB5_Relay();
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_RESET); 
-  HAL_Delay(200);
+  // ═══════════════════════════════════════════════════════════
+  //              INICIALIZACIÓN RÁPIDA - SIN SECUENCIA ARRANQUE
+  // ═══════════════════════════════════════════════════════════
   
+  // Inicializar periféricos básicos
+  Init_PA2_PB5_Relay();
   PWM_Init_TIM1();
   NEO_init();
-  NEO_clearAll();
+  Init_PF4_LED();
+  
+  // ═══════════════════════════════════════════════════════════
+  //              CONFIGURACIÓN I2C Y SERVICIOS
+  // ═══════════════════════════════════════════════════════════
   
   uint8_t dynamic_i2c_addr = Init_I2C_Address_Management();
   Init_i2c_pins();
@@ -686,10 +736,13 @@ int main(void)
   {
     APP_ErrorHandler();
   }
+  
+  // MODO INTERRUPT: igual que i2c_slave_devlab
   HAL_NVIC_SetPriority(I2C1_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(I2C1_IRQn);
   HAL_I2C_Slave_Receive_IT(&I2cHandle, aRxBuffer, DATA_LENGTH);
   uint32_t last_i2c_check = HAL_GetTick();
+  
   while (1)
   {
     Process_Relay_Pulse();

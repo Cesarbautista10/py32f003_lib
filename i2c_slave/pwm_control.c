@@ -1,9 +1,9 @@
 /**
  * ═══════════════════════════════════════════════════════════════════════════════════════
  * @file    pwm_control.c
- * @brief   Control PWM para PY32F003 - TIM3_CH1 en PA2
- * @version v5.3
- * @date    Diciembre 2024
+ * @brief   Control PWM para PY32F003 - TIM1_CH3 en PB6
+ * @version v5.4
+ * @date    Enero 2026
  * @author  Refactorización modular con IA
  * @mcu     PY32F003F18
  * ═══════════════════════════════════════════════════════════════════════════════════════
@@ -28,7 +28,7 @@ static uint16_t pwm_prescaler = 23;               // Prescaler value
 // ═══════════════════════════════════════════════════════════════════════════════════════
 
 /**
- * @brief  Inicializar PWM en TIM3_CH1 (PA2)
+ * @brief  Inicializar PWM en TIM1_CH3 (PB6)
  * @param  None
  * @retval None
  */
@@ -37,30 +37,31 @@ void PWM_Init_TIM1(void)
   GPIO_InitTypeDef GPIO_InitStruct = {0};
   
   // Habilitar relojes
-  __HAL_RCC_GPIOA_CLK_ENABLE();
-  __HAL_RCC_TIM3_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
+  __HAL_RCC_TIM1_CLK_ENABLE();
   
-  // Configurar PA2 como función alternativa para TIM3_CH1 (PWM)
-  // PA2 conecta a TIM3_CH1 usando AF13 en PY32F003
+  // Configurar PB6 como función alternativa para TIM1_CH3 (PWM)
+  // PB6 conecta a TIM1_CH3 usando AF1 en PY32F003
   GPIO_InitStruct.Pin = PWM_GPIO_PIN;
   GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;        // Push-Pull Alternate Function
   GPIO_InitStruct.Pull = GPIO_NOPULL;            // Sin pull resistors
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;  // Alta frecuencia para PWM
-  GPIO_InitStruct.Alternate = PWM_GPIO_AF;       // AF13 para TIM3_CH1
+  GPIO_InitStruct.Alternate = PWM_GPIO_AF;       // AF1 para TIM1_CH3
   HAL_GPIO_Init(PWM_GPIO_PORT, &GPIO_InitStruct);
   
-  // Resetear TIM3 para configuración limpia
+  // Resetear TIM1 para configuración limpia
   PWM_TIMER->CR1 = 0;
   PWM_TIMER->CR2 = 0;
   PWM_TIMER->CCMR1 = 0;
   PWM_TIMER->CCMR2 = 0;
   PWM_TIMER->CCER = 0;
+  PWM_TIMER->BDTR = 0;
   PWM_TIMER->CCR1 = 0;
   PWM_TIMER->CCR2 = 0;
   PWM_TIMER->CCR3 = 0;
   PWM_TIMER->CCR4 = 0;
   
-  // Configuración básica del timer TIM3
+  // Configuración básica del timer TIM1
   // Frecuencia del PWM: 24MHz / ((PSC+1) * (ARR+1))
   // Para 1kHz: 24MHz / (24 * 1000) = 1kHz
   pwm_prescaler = 23;        // Prescaler: 24 (divide clock por 24)
@@ -69,32 +70,39 @@ void PWM_Init_TIM1(void)
   PWM_TIMER->PSC = pwm_prescaler;
   PWM_TIMER->ARR = pwm_arr_value;
   
-  // Configurar canal 1 en CCMR1 (canales 1 y 2)
-  // Canal 1 usa bits 0-7 en CCMR1
-  PWM_TIMER->CCMR1 = 0;                              // Limpiar completamente CCMR1
-  PWM_TIMER->CCMR1 |= (0 << 0);                      // CC1S = 00 (salida)
-  PWM_TIMER->CCMR1 |= (1 << 3);                      // OC1PE = 1 (preload enable)
-  PWM_TIMER->CCMR1 |= (6 << 4);                      // OC1M = 0110 (PWM mode 1)
-  PWM_TIMER->CCMR1 |= (0 << 7);                      // OC1CE = 0 (no clear enable)
+  // Configurar canal 3 en CCMR2 (canales 3 y 4)
+  // Canal 3 usa bits 0-7 en CCMR2
+  PWM_TIMER->CCMR2 = 0;                              // Limpiar completamente CCMR2
+  PWM_TIMER->CCMR2 |= (0 << 0);                      // CC3S = 00 (salida)
+  PWM_TIMER->CCMR2 |= (1 << 3);                      // OC3PE = 1 (preload enable)
+  PWM_TIMER->CCMR2 |= (6 << 4);                      // OC3M = 0110 (PWM mode 1)
+  PWM_TIMER->CCMR2 |= (0 << 7);                      // OC3CE = 0 (no clear enable)
   
-  // Configurar CCER para canal 1
+  // Configurar CCER para canal 3 (DESHABILITADO al inicio)
   PWM_TIMER->CCER = 0;                               // Limpiar completamente CCER
-  PWM_TIMER->CCER |= (1 << 0);                       // CC1E = 1 (enable channel 1 output)
-  PWM_TIMER->CCER &= ~(1 << 1);                      // CC1P = 0 (polaridad activa alta)
+  // NO habilitar CC3E aquí - el canal permanece deshabilitado hasta recibir comando
+  PWM_TIMER->CCER &= ~(1 << 9);                      // CC3P = 0 (polaridad activa alta)
+  PWM_TIMER->CCER &= ~(1 << 10);                     // CC3NE = 0 (disable complementary output)
+  PWM_TIMER->CCER &= ~(1 << 11);                     // CC3NP = 0 (complementary polarity)
   
-  // Configurar duty cycle inicial a 0 (apagado)
-  PWM_TIMER->CCR1 = 0;                               // 0% - PWM apagado
+  // Configurar duty cycle inicial a 0 (APAGADO)
+  PWM_TIMER->CCR3 = 0;                               // 0% - PWM apagado
   
-  // Configurar características del timer
+  // Configurar características avanzadas de TIM1
   PWM_TIMER->CR1 |= (1 << 7);                        // TIM_CR1_ARPE (Auto-reload preload enable)
   PWM_TIMER->CR1 &= ~(3 << 5);                       // CMS = 00 (Edge-aligned mode)
   PWM_TIMER->CR1 &= ~(1 << 4);                       // DIR = 0 (Upcounter)
+  
+  // BDTR configurado pero MOE deshabilitado al inicio
+  PWM_TIMER->BDTR &= ~(1 << 15);                     // MOE = 0 (Main Output DISABLED)
+  PWM_TIMER->BDTR &= ~(0xFF << 0);                   // DTG = 0 (No dead time)
+  PWM_TIMER->BDTR &= ~(3 << 10);                     // LOCK = 00 (No lock)
   
   // Generar evento de actualización para cargar valores
   PWM_TIMER->EGR |= (1 << 0);                        // UG = 1 (Update generation)
   
   // NO iniciar el timer - permanece apagado hasta recibir comando
-  // PWM_TIMER->CR1 |= (1 << 0);                     // CEN = 1 (Counter enable) - DESHABILITADO
+  // PWM_TIMER->CR1 |= (1 << 0);                     // CEN = 1 - DESHABILITADO
   
   // Marcar como inicializado pero NO habilitado
   pwm_initialized = 1;
@@ -138,11 +146,14 @@ void PWM_Set_Frequency(uint16_t frequency_hz)
   PWM_TIMER->PSC = pwm_prescaler;
   PWM_TIMER->ARR = pwm_arr_value;
   
-  // Ajustar duty cycle manteniendo el porcentaje actual
-  PWM_TIMER->CCR1 = (pwm_arr_value * pwm_current_duty) / 100;
+  // Ajustar duty cycle manteniendo el porcentaje actual (CANAL 3)
+  PWM_TIMER->CCR3 = (pwm_arr_value * pwm_current_duty) / 100;
   
-  // Habilitar la salida del canal 1
-  PWM_TIMER->CCER |= (1 << 0);                       // CC1E = 1 (habilitar salida canal 1)
+  // Habilitar la salida del canal 3
+  PWM_TIMER->CCER |= (1 << 8);                       // CC3E = 1 (habilitar salida canal 3)
+  
+  // Habilitar MOE para TIM1 (Main Output Enable)
+  PWM_TIMER->BDTR |= (1 << 15);                      // MOE = 1
   
   // Generar evento de actualización para cargar los nuevos valores
   PWM_TIMER->EGR |= (1 << 0);                        // UG = 1 (Update generation)
@@ -165,9 +176,9 @@ void PWM_Set_Duty_Cycle(uint16_t duty_percent)
   // Validar rango
   if (duty_percent > 100) duty_percent = 100;
   
-  // Calcular y configurar CCR1
+  // Calcular y configurar CCR3 (CANAL 3)
   uint16_t ccr_value = (pwm_arr_value * duty_percent) / 100;
-  PWM_TIMER->CCR1 = ccr_value;
+  PWM_TIMER->CCR3 = ccr_value;
   
   // Actualizar variable actual
   pwm_current_duty = duty_percent;
@@ -189,8 +200,11 @@ void PWM_Enable(void)
     PWM_Init_TIM1();
   }
   
-  // Habilitar salida del canal 1
-  PWM_TIMER->CCER |= (1 << 0);                       // CC1E = 1 (enable channel 1 output)
+  // Habilitar MOE para TIM1 (Main Output Enable)
+  PWM_TIMER->BDTR |= (1 << 15);                      // MOE = 1
+  
+  // Habilitar salida del canal 3
+  PWM_TIMER->CCER |= (1 << 8);                       // CC3E = 1 (enable channel 3 output)
   
   // Iniciar el timer si no está corriendo
   PWM_TIMER->CR1 |= (1 << 0);                        // CEN = 1 (Counter enable)
@@ -212,14 +226,17 @@ void PWM_Disable(void)
   // Deshabilitar interrupciones temporalmente para operación atómica
   __disable_irq();
   
-  // Poner duty cycle a 0 primero
-  PWM_TIMER->CCR1 = 0;
+  // Poner duty cycle a 0 primero (CANAL 3)
+  PWM_TIMER->CCR3 = 0;
   
-  // Deshabilitar salida del canal 1
-  PWM_TIMER->CCER &= ~(1 << 0);                      // CC1E = 0 (disable channel 1 output)
+  // Deshabilitar salida del canal 3
+  PWM_TIMER->CCER &= ~(1 << 8);                      // CC3E = 0 (disable channel 3 output)
   
   // Detener completamente el timer para evitar interferencias
   PWM_TIMER->CR1 &= ~(1 << 0);                       // CEN = 0 (Counter disable)
+  
+  // Deshabilitar MOE para TIM1
+  PWM_TIMER->BDTR &= ~(1 << 15);                     // MOE = 0
   
   pwm_enabled = 0;
   
