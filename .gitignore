@@ -1,10 +1,12 @@
 # Build artifacts
-Build/*.bin
-Build/*.elf
-Build/*.hex
-Build/*.lst
-Build/*.map
-Build/*/
+Build/
+*.o
+*.bin
+*.elf
+*.hex
+*.lst
+*.map
+*.d
 
 # Editor and IDE files
 .vscode/
@@ -15,4 +17,9 @@ Build/*/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Python virtual environments
 venv/
+
+# Untracked directories
+lasted/arduino/
