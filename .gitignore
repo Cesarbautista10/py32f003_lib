@@ -1,7 +1,6 @@
 # Build artifacts
-Build/
+Build/*
 *.o
-*.bin
 *.elf
 *.hex
 *.lst
