@@ -358,7 +358,7 @@ static void Process_Relay_Pulse(void)
     pulse_pending = 0;
   }
   if (pulse_active) {
-    if ((HAL_GetTick() - pulse_start_time) >= 10) {
+    if ((HAL_GetTick() - pulse_start_time) >= 25) {
       HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_RESET);
       pulse_active = 0;
     }
