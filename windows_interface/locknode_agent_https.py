@@ -287,8 +287,12 @@ def detect_cmsis_dap():
             
             logger.info(f"pyocd encontró {len(devices_found)} dispositivo(s)")
             
-        except ImportError:
-            logger.warning("pyocd no está instalado, intentando con pyusb...")
+        except (ImportError, AttributeError) as e:
+            # AttributeError ocurre cuando pyocd no es compatible con la versión de Python
+            if isinstance(e, AttributeError):
+                logger.warning(f"pyocd no es compatible con esta versión de Python: {e}. Usando pyusb...")
+            else:
+                logger.warning("pyocd no está instalado, intentando con pyusb...")
             # Si pyocd no está, intentar con pyusb (puede requerir drivers en Windows)
             try:
                 import usb.core
@@ -321,18 +325,47 @@ def detect_cmsis_dap():
                 logger.error(f"No se pudo usar pyusb: {e}")
                 return jsonify({
                     'success': False,
-                    'error': 'No hay librerías de detección instaladas o falta configuración. Instala: pip install pyocd',
+                    'error': 'No hay librerías de detección instaladas o falta configuración. Instala: pip install --upgrade pyocd pyusb',
                     'devices': [],
                     'count': 0
                 }), 200
         except Exception as e:
-            logger.error(f"Error al usar pyocd: {e}")
-            return jsonify({
-                'success': False,
-                'error': f'Error al detectar dispositivos con pyocd: {str(e)}',
-                'devices': [],
-                'count': 0
-            }), 200
+            # Si pyocd falla por cualquier razón (incompatibilidad, etc.), intentar con pyusb
+            logger.warning(f"Error al usar pyocd: {e}. Intentando con pyusb...")
+            try:
+                import usb.core
+                import usb.util
+                
+                # Buscar dispositivos USB
+                all_devices = usb.core.find(find_all=True)
+                
+                for device in all_devices:
+                    try:
+                        product_name = usb.util.get_string(device, device.iProduct) if device.iProduct else "Unknown"
+                        manufacturer = usb.util.get_string(device, device.iManufacturer) if device.iManufacturer else "Unknown"
+                        
+                        keywords = ['cmsis', 'dap', 'daplink', 'jlink', 'stlink', 'debugger', 'probe']
+                        device_info = f"{product_name} {manufacturer}".lower()
+                        
+                        if any(keyword in device_info for keyword in keywords):
+                            devices_found.append({
+                                'vendor_id': f"0x{device.idVendor:04x}",
+                                'product_id': f"0x{device.idProduct:04x}",
+                                'manufacturer': manufacturer,
+                                'product': product_name,
+                                'bus': device.bus,
+                                'address': device.address
+                            })
+                    except (ValueError, usb.core.USBError):
+                        continue
+            except Exception as usb_error:
+                logger.error(f"Tampoco se pudo usar pyusb: {usb_error}")
+                return jsonify({
+                    'success': False,
+                    'error': f'Error al detectar dispositivos. pyocd: {str(e)}, pyusb: {str(usb_error)}',
+                    'devices': [],
+                    'count': 0
+                }), 200
         
         if devices_found:
             logger.info(f"Se encontraron {len(devices_found)} dispositivo(s) CMSIS-DAP")
