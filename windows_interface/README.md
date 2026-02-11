@@ -105,41 +105,41 @@ Este script verifica:
 - Detección de dispositivos CMSIS- DAP conectados
 - Información detallada de cada dispositivo
 
-# # 🔍 Detección de Dispositivos CMSIS- DAP
+##  Detección de Dispositivos CMSIS- DAP
 
 Los agentes incluyen capacidad para detectar automáticamente dispositivos CMSIS- DAP (programadores/depuradores).
 
-# ## Características
+### Características
 - Detecta múltiples dispositivos simultáneos
 - Soporta DAPLink, J- Link, ST- Link, etc.
 - Muestra información detallada (VID/PID, fabricante)
 - No invasivo (solo lectura, no bloquea dispositivos)
 
-# ## Uso desde el Panel Web
+### Uso desde el Panel Web
 1. Establecer conexión con el agente
 2. Ir a "Operaciones de Firmware" (Paso 2)
 3. Hacer clic en "Detectar Dispositivos CMSIS- DAP"
 4. Ver lista de dispositivos encontrados
 
-# ## Uso desde API
+### Uso desde API
 ```bash
 curl http://localhost:8081/api/locknode/detect- cmsis- dap
 ```
 
 **Ver documentación completa:** `CMSIS- DAP- DETECTION.md`
 
-# #  Programación de Firmware
+##  Programación de Firmware
 
 Los agentes permiten programar firmware en dispositivos usando pyOCD directamente desde la interfaz web.
 
-# ## Características
+### Características
 - Borrado automático del chip (erase)
 - Carga de firmware (.bin)
 - Selector de archivos en la interfaz
 - Soporte para PY32F003x4 y otros targets
 - Monitoreo de progreso en tiempo real
 
-# ## Uso desde el Panel Web
+### Uso desde el Panel Web
 1. Conectar dispositivo CMSIS- DAP
 2. Establecer conexión con el agente
 3. Ir a "Operaciones de Firmware" (Paso 2)
@@ -148,14 +148,14 @@ Los agentes permiten programar firmware en dispositivos usando pyOCD directament
    - Clic en " Programar Firmware"
 5. Esperar confirmación
 
-# ## Comandos Equivalentes
+### Comandos Equivalentes
 ```bash
 # Lo que hace el agente automáticamente:
 python - m pyocd erase - t py32f003x4 - - chip - - config Misc/pyocd.yaml
 python - m pyocd load firmware.bin - t py32f003x4 - - config Misc/pyocd.yaml
 ```
 
-# ## Agregar Nuevos Firmwares
+### Agregar Nuevos Firmwares
 ```bash
 # Copiar archivo .bin al directorio firmware
 cp mi_firmware.bin windows_interface/firmware/
@@ -166,23 +166,23 @@ cp mi_firmware.bin windows_interface/firmware/
 
 **Ver documentación completa:** `FIRMWARE- PROGRAMMING.md`
 
-# # 📋 Requisitos
+##  Requisitos
 
-# ## Sistema
+### Sistema
 - **Windows 10/11**
 - **Python 3.8+**
 - OpenSSL (para HTTPS)
 
-# ## Python Packages
+### Python Packages
 - `flask` - Servidor web
 - `flask- cors` - Manejo de CORS
 - `pyusb` - Detección de dispositivos USB
 - `pyocd` - Detección específica de CMSIS- DAP
 - `pyserial` - Comunicación serial con dispositivo (opcional)
 
-# # 🔧 Configuración
+##  Configuración
 
-# ## Cambiar Puerto
+### Cambiar Puerto
 
 Por defecto usa el puerto **8081**. Para cambiarlo:
 
@@ -200,7 +200,7 @@ app.run(
 const AGENT_BASE_URL = 'http://localhost:8081';  // ← Actualizar puerto
 ```
 
-# ## Configurar Dispositivo Serial
+### Configurar Dispositivo Serial
 
 Si necesitas comunicación serial con el dispositivo LockNode:
 
@@ -215,18 +215,17 @@ device = serial.Serial(
 )
 ```
 
-# # 📊 API Endpoints
+##  API Endpoints
 
 El agente expone los siguientes endpoints:
-
 | Método | Endpoint | Descripción |
-|- - - - - - - - |- - - - - - - - - - |- - - - - - - - - - - - - |
+|--------|----------|-------------|
 | POST | `/api/locknode/connect` | Establecer conexión |
 | POST | `/api/locknode/disconnect` | Desconectar agente |
 | POST | `/api/locknode/command` | Enviar comando al dispositivo |
-| POST | `/api/locknode/upload- firmware` | Cargar firmware |
-| POST | `/api/locknode/download- firmware` | Descargar firmware |
-| GET | `/api/locknode/detect- cmsis- dap` | Detectar dispositivos CMSIS- DAP |
+| POST | `/api/locknode/upload-firmware` | Cargar firmware |
+| POST | `/api/locknode/download-firmware` | Descargar firmware |
+| GET | `/api/locknode/detect-cmsis-dap` | Detectar dispositivos CMSIS-DAP |
 | GET | `/api/locknode/firmware/list` | **NUEVO:** Listar firmwares disponibles |
 | POST | `/api/locknode/firmware/program` | **NUEVO:** Programar firmware con pyOCD |
 | GET | `/api/locknode/heartbeat` | Verificar estado (automático) |

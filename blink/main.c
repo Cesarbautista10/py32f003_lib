@@ -15,14 +15,17 @@
 
 // Variables globales
 UART_HandleTypeDef huart2;          // Usando USART2 en lugar de USART1
+ADC_HandleTypeDef hadc;              // Handle del ADC
 uint8_t rx_buffer[1];               // Buffer para recibir 1 byte
 uint8_t hello_sent = 0;             // Flag para enviar "Hello" solo una vez
 
 // Declaraciones de funciones
 static void Init_UART(void);
 static void Init_LED_Debug(void);
+static void Init_ADC(void);
 static void Send_Hello(void);
 static void Send_UID(void);
+static void Send_ADC_Value(void);
 static void UART_SendString(const char* str);
 
 /**
@@ -40,37 +43,40 @@ int main(void)
   // Inicializar LED de debug en PB5
   Init_LED_Debug();
   
+  // Inicializar ADC en PA2
+  Init_ADC();
+  
   // Paso 1: Encender LED para indicar que el programa arrancó
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_SET);
   HAL_Delay(500);
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_RESET);
   HAL_Delay(200);
 
-  // Paso 2: Parpadear 2 veces - antes de Init_UART
-  for(int i = 0; i < 2; i++) {
-    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_5);
-    HAL_Delay(100);
-    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_5);
-    HAL_Delay(100);
-  }
+  // // Paso 2: Parpadear 2 veces - antes de Init_UART
+  // for(int i = 0; i < 2; i++) {
+  //   HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_5);
+  //   HAL_Delay(100);
+  //   HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_5);
+  //   HAL_Delay(100);
+  // }
 
   // Inicialización del UART
   Init_UART();
 
-  // Paso 3: Parpadear 3 veces rápido - después de Init_UART
-  for(int i = 0; i < 3; i++) {
-    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_5);
-    HAL_Delay(100);
-  }
+  // // Paso 3: Parpadear 3 veces rápido - después de Init_UART
+  // for(int i = 0; i < 3; i++) {
+  //   HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_5);
+  //   HAL_Delay(100);
+  // }
 
   // Paso 4: Enviar mensaje "Hello" al inicio
   Send_Hello();
   
-  // Paso 5: Parpadear 5 veces - después de Send_Hello
-  for(int i = 0; i < 5; i++) {
-    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_5);
-    HAL_Delay(100);
-  }
+  // // Paso 5: Parpadear 5 veces - después de Send_Hello
+  // for(int i = 0; i < 5; i++) {
+  //   HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_5);
+  //   HAL_Delay(100);
+  // }
 
   // Iniciar recepción en modo interrupción
   HAL_UART_Receive_IT(&huart2, rx_buffer, 1);
@@ -100,6 +106,76 @@ static void Init_LED_Debug(void)
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
   
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_RESET);
+}
+
+/**
+  * @brief  Inicialización del ADC en PA2 (canal 2)
+  * @retval None
+  */
+static void Init_ADC(void)
+{
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+  ADC_ChannelConfTypeDef sConfig = {0};
+
+  // Habilitar reloj de GPIOA
+  __HAL_RCC_GPIOA_CLK_ENABLE();
+  
+  // Habilitar reloj del ADC
+  __HAL_RCC_ADC_CLK_ENABLE();
+
+  // Configurar PA2 como entrada analógica con pull-down
+  // El pull-down evita lecturas flotantes cuando no hay señal conectada
+  GPIO_InitStruct.Pin = GPIO_PIN_2;
+  GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;  // Pull-down para evitar ruido cuando está flotando
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  // Configurar el ADC
+  hadc.Instance = ADC1;
+  hadc.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
+  hadc.Init.Resolution = ADC_RESOLUTION_12B;
+  hadc.Init.DataAlign = ADC_DATAALIGN_RIGHT;
+  hadc.Init.ScanConvMode = ADC_SCAN_DIRECTION_FORWARD;
+  hadc.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+  hadc.Init.LowPowerAutoWait = DISABLE;
+  hadc.Init.ContinuousConvMode = DISABLE;
+  hadc.Init.DiscontinuousConvMode = DISABLE;
+  hadc.Init.ExternalTrigConv = ADC_SOFTWARE_START;
+  hadc.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
+  hadc.Init.DMAContinuousRequests = DISABLE;
+  hadc.Init.Overrun = ADC_OVR_DATA_OVERWRITTEN;
+  hadc.Init.SamplingTimeCommon = ADC_SAMPLETIME_239CYCLES_5;
+  
+  if (HAL_ADC_Init(&hadc) != HAL_OK)
+  {
+    // Error: parpadear rápido
+    while(1) {
+      HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_5);
+      HAL_Delay(25);
+    }
+  }
+
+  // Configurar el canal ADC (PA2 = ADC_IN2)
+  sConfig.Channel = ADC_CHANNEL_2;
+  sConfig.Rank = ADC_RANK_CHANNEL_NUMBER;
+  if (HAL_ADC_ConfigChannel(&hadc, &sConfig) != HAL_OK)
+  {
+    // Error: parpadear muy rápido
+    while(1) {
+      HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_5);
+      HAL_Delay(10);
+    }
+  }
+  
+  // Calibrar el ADC
+  if (HAL_ADCEx_Calibration_Start(&hadc) != HAL_OK)
+  {
+    // Error de calibración: parpadear medio rápido
+    while(1) {
+      HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_5);
+      HAL_Delay(15);
+    }
+  }
 }
 
 /**
@@ -211,7 +287,9 @@ static void Init_UART(void)
   */
 static void Send_Hello(void)
 {
-  const char* hello_msg = "Hello from C!\r\n";
+  const char* hello_msg2 =  " \r\n";
+  HAL_UART_Transmit(&huart2, (uint8_t*)hello_msg2, strlen(hello_msg2), 10);
+  const char* hello_msg = "Keep Calm, Evelyn!\r\n";
   HAL_UART_Transmit(&huart2, (uint8_t*)hello_msg, strlen(hello_msg), 1000);
 }
 
@@ -224,22 +302,31 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
   if (huart->Instance == USART2)
   {
+    // Guardar el caracter recibido
+    uint8_t received_char = rx_buffer[0];
+    
+    // PRIMERO: Re-habilitar recepción inmediatamente
+    HAL_UART_Receive_IT(&huart2, rx_buffer, 1);
+    
+    // DESPUÉS: Procesar el comando
     // Toggle LED para indicar que recibimos un byte
     HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_5);
     
     // Comando 'u' o 'U' para leer UID
-    if (rx_buffer[0] == 'u' || rx_buffer[0] == 'U')
+    if (received_char == 'u' || received_char == 'U')
     {
       Send_UID();
+    }
+    // Comando 'a' o 'A' para leer ADC
+    else if (received_char == 'a' || received_char == 'A')
+    {
+      Send_ADC_Value();
     }
     else
     {
       // Echo: enviar de vuelta el byte recibido
-      HAL_UART_Transmit(&huart2, rx_buffer, 1, 100);
+      HAL_UART_Transmit(&huart2, &received_char, 1, 100);
     }
-    
-    // Volver a habilitar recepción para el siguiente byte
-    HAL_UART_Receive_IT(&huart2, rx_buffer, 1);
   }
 }
 
@@ -262,7 +349,7 @@ static void Send_UID(void)
   uint32_t* uid_ptr = (uint32_t*)UID_BASE_ADDRESS;
   char buffer[64];
   
-  UART_SendString("\r\nUID: ");
+  UART_SendString("UID: ");
   
   // El UID del PY32F003 tiene 96 bits (3 palabras de 32 bits)
   for (int i = 0; i < 3; i++)
@@ -279,4 +366,85 @@ static void Send_UID(void)
   }
   
   UART_SendString("\r\n");
+}
+
+/**
+  * @brief  Leer y enviar el valor del ADC en PA2
+  * @retval None
+  */
+static void Send_ADC_Value(void)
+{
+  char buffer[32];
+  uint32_t adc_value = 0;
+  uint32_t voltage_mv = 0;
+  HAL_StatusTypeDef status;
+  
+  // Iniciar conversión ADC
+  status = HAL_ADC_Start(&hadc);
+  if (status != HAL_OK)
+  {
+    UART_SendString("ADC Start Error\r\n");
+    return;
+  }
+  
+  // Esperar a que termine la conversión (timeout 10ms es suficiente)
+  if (HAL_ADC_PollForConversion(&hadc, 10) == HAL_OK)
+  {
+    // Leer el valor del ADC (12 bits: 0-4095)
+    adc_value = HAL_ADC_GetValue(&hadc);
+    
+    // Calcular voltaje en mV (asumiendo Vref = 5V)
+    // voltage_mv = (adc_value * 5000) / 4095
+    voltage_mv = (adc_value * 5000) / 4095;
+    
+    // Formatear y enviar el resultado
+    UART_SendString("ADC PA2: ");
+    
+    // Enviar valor ADC (0-4095)
+    int len = 0;
+    uint32_t temp = adc_value;
+    do {
+      buffer[len++] = '0' + (temp % 10);
+      temp /= 10;
+    } while (temp > 0);
+    
+    // Invertir el string
+    for (int i = 0; i < len / 2; i++) {
+      char c = buffer[i];
+      buffer[i] = buffer[len - 1 - i];
+      buffer[len - 1 - i] = c;
+    }
+    buffer[len] = '\0';
+    UART_SendString(buffer);
+    
+    UART_SendString(" | ");
+    
+    // Enviar voltaje en mV
+    len = 0;
+    temp = voltage_mv;
+    do {
+      buffer[len++] = '0' + (temp % 10);
+      temp /= 10;
+    } while (temp > 0);
+    
+    // Invertir el string
+    for (int i = 0; i < len / 2; i++) {
+      char c = buffer[i];
+      buffer[i] = buffer[len - 1 - i];
+      buffer[len - 1 - i] = c;
+    }
+    buffer[len] = '\0';
+    UART_SendString(buffer);
+    UART_SendString(" mV\r\n");
+  }
+  else
+  {
+    UART_SendString("ADC Timeout\r\n");
+  }
+  
+  // Detener el ADC y limpiar flags
+  HAL_ADC_Stop(&hadc);
+  
+  // Limpiar cualquier flag pendiente
+  __HAL_ADC_CLEAR_FLAG(&hadc, ADC_FLAG_EOC | ADC_FLAG_EOS | ADC_FLAG_OVR);
 }
