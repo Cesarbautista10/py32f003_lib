@@ -2,7 +2,7 @@
 
 Este directorio contiene los agentes Python que corren en Windows para comunicarse con el panel web LockNode.
 
-## 📁 Estructura de Archivos
+## Estructura de Archivos
 
 ```
 windows_interface/
@@ -10,11 +10,19 @@ windows_interface/
 ├── locknode_agent_https.py     # Agente HTTPS (producción)
 ├── generate_ssl_certs.sh       # Script para generar certificados SSL
 ├── test_device_detection.py    # Script de prueba para CMSIS-DAP
-├── HTTP_vs_HTTPS_GUIDE.md      # Guía completa HTTP vs HTTPS
-├── CMSIS-DAP-DETECTION.md      # Documentación detección dispositivos
-├── FIRMWARE-PROGRAMMING.md     # Documentación programación firmware
+├── test_firmware_programming.py # Script de prueba para programación
+├── install_uv_setup.sh         # Script de instalación de UV
+├── start_agent_uv.sh           # Script de inicio con UV (Linux/macOS)
+├── start_agent_uv.bat          # Script de inicio con UV (Windows)
 ├── requirements.txt            # Dependencias Python
+├── pyproject.toml              # Configuración del proyecto con UV
+├── .python-version             # Versión de Python bloqueada (3.11)
 ├── README.md                   # Este archivo
+├── docs/                       # Documentación del proyecto
+│   ├── INICIO_RAPIDO.md        # Guía de inicio rápido
+│   ├── README_UV.md            # Guía completa de UV
+│   ├── MIGRACION_UV.md         # Guía de migración desde pip
+│   └── RESUMEN_UV.md           # Resumen del setup con UV
 ├── certs/                      # Carpeta para certificados SSL
 │   ├── cert.pem
 │   └── key.pem
@@ -25,7 +33,7 @@ windows_interface/
         └── *.pack              # Packs de soporte
 ```
 
-## 🎯 Propósito
+## Propósito
 
 Los agentes Python actúan como puente entre:
 - **Panel Web** (Frontend React/TypeScript)
@@ -36,19 +44,40 @@ Panel Web ←→ Agente Python ←→ Dispositivo LockNode
 (Frontend)   (Windows)         (Hardware)
 ```
 
-## 🚀 Inicio Rápido
+## Inicio Rápido
 
-### 1. Instalar Dependencias
+> RECOMENDADO: Usa [UV](docs/README_UV.md) para gestión automática de Python 3.11 y dependencias.
+
+### Opción A: Usando UV (Recomendado)
 
 ```bash
 # Navegar al directorio
 cd windows_interface
 
-# Instalar paquetes Python
+# Instalar uv (primera vez)
+curl -LsSf https://astral.sh/uv/install.sh | sh  # Linux/macOS
+# o en Windows: powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+
+# Sincronizar proyecto (instala Python 3.11 y dependencias automáticamente)
+uv sync
+
+# Ejecutar el agente
+uv run python locknode_agent_https.py
+```
+
+**[Ver guía completa de UV](docs/README_UV.md)**
+
+### Opción B: Usando pip tradicional
+
+```bash
+# Navegar al directorio
+cd windows_interface
+
+# Instalar paquetes Python (requiere Python 3.11 instalado)
 pip install -r requirements.txt
 ```
 
-### 2. Ejecutar Agente
+## 2. Ejecutar Agente
 
 **Para Desarrollo (HTTP):**
 ```bash
@@ -64,7 +93,7 @@ bash generate_ssl_certs.sh
 python locknode_agent_https.py
 ```
 
-### 3. Probar Detección de Dispositivos
+# ## 3. Probar Detección de Dispositivos
 
 ```bash
 # Ejecutar script de prueba
@@ -72,88 +101,88 @@ python test_device_detection.py
 ```
 
 Este script verifica:
-- ✅ Instalación de librerías (pyusb, pyocd)
-- ✅ Detección de dispositivos CMSIS-DAP conectados
-- ✅ Información detallada de cada dispositivo
+- Instalación de librerías (pyusb, pyocd)
+- Detección de dispositivos CMSIS- DAP conectados
+- Información detallada de cada dispositivo
 
-## 🔍 Detección de Dispositivos CMSIS-DAP
+# # 🔍 Detección de Dispositivos CMSIS- DAP
 
-Los agentes incluyen capacidad para detectar automáticamente dispositivos CMSIS-DAP (programadores/depuradores).
+Los agentes incluyen capacidad para detectar automáticamente dispositivos CMSIS- DAP (programadores/depuradores).
 
-### Características
+# ## Características
 - Detecta múltiples dispositivos simultáneos
-- Soporta DAPLink, J-Link, ST-Link, etc.
+- Soporta DAPLink, J- Link, ST- Link, etc.
 - Muestra información detallada (VID/PID, fabricante)
 - No invasivo (solo lectura, no bloquea dispositivos)
 
-### Uso desde el Panel Web
+# ## Uso desde el Panel Web
 1. Establecer conexión con el agente
 2. Ir a "Operaciones de Firmware" (Paso 2)
-3. Hacer clic en "Detectar Dispositivos CMSIS-DAP"
+3. Hacer clic en "Detectar Dispositivos CMSIS- DAP"
 4. Ver lista de dispositivos encontrados
 
-### Uso desde API
+# ## Uso desde API
 ```bash
-curl http://localhost:8081/api/locknode/detect-cmsis-dap
+curl http://localhost:8081/api/locknode/detect- cmsis- dap
 ```
 
-**Ver documentación completa:** `CMSIS-DAP-DETECTION.md`
+**Ver documentación completa:** `CMSIS- DAP- DETECTION.md`
 
-## ⚡ Programación de Firmware
+# #  Programación de Firmware
 
 Los agentes permiten programar firmware en dispositivos usando pyOCD directamente desde la interfaz web.
 
-### Características
+# ## Características
 - Borrado automático del chip (erase)
 - Carga de firmware (.bin)
 - Selector de archivos en la interfaz
 - Soporte para PY32F003x4 y otros targets
 - Monitoreo de progreso en tiempo real
 
-### Uso desde el Panel Web
-1. Conectar dispositivo CMSIS-DAP
+# ## Uso desde el Panel Web
+1. Conectar dispositivo CMSIS- DAP
 2. Establecer conexión con el agente
 3. Ir a "Operaciones de Firmware" (Paso 2)
 4. En "Programar Firmware (pyOCD)":
    - Seleccionar archivo .bin
-   - Clic en "⚡ Programar Firmware"
+   - Clic en " Programar Firmware"
 5. Esperar confirmación
 
-### Comandos Equivalentes
+# ## Comandos Equivalentes
 ```bash
 # Lo que hace el agente automáticamente:
-python -m pyocd erase -t py32f003x4 --chip --config Misc/pyocd.yaml
-python -m pyocd load firmware.bin -t py32f003x4 --config Misc/pyocd.yaml
+python - m pyocd erase - t py32f003x4 - - chip - - config Misc/pyocd.yaml
+python - m pyocd load firmware.bin - t py32f003x4 - - config Misc/pyocd.yaml
 ```
 
-### Agregar Nuevos Firmwares
+# ## Agregar Nuevos Firmwares
 ```bash
 # Copiar archivo .bin al directorio firmware
 cp mi_firmware.bin windows_interface/firmware/
 
 # Actualizar lista en la interfaz web
-# (clic en "🔄 Actualizar Lista")
+# (clic en " Actualizar Lista")
 ```
 
-**Ver documentación completa:** `FIRMWARE-PROGRAMMING.md`
+**Ver documentación completa:** `FIRMWARE- PROGRAMMING.md`
 
-## 📋 Requisitos
+# # 📋 Requisitos
 
-### Sistema
+# ## Sistema
 - **Windows 10/11**
 - **Python 3.8+**
 - OpenSSL (para HTTPS)
 
-### Python Packages
+# ## Python Packages
 - `flask` - Servidor web
-- `flask-cors` - Manejo de CORS
+- `flask- cors` - Manejo de CORS
 - `pyusb` - Detección de dispositivos USB
-- `pyocd` - Detección específica de CMSIS-DAP
+- `pyocd` - Detección específica de CMSIS- DAP
 - `pyserial` - Comunicación serial con dispositivo (opcional)
 
-## 🔧 Configuración
+# # 🔧 Configuración
 
-### Cambiar Puerto
+# ## Cambiar Puerto
 
 Por defecto usa el puerto **8081**. Para cambiarlo:
 
@@ -171,7 +200,7 @@ app.run(
 const AGENT_BASE_URL = 'http://localhost:8081';  // ← Actualizar puerto
 ```
 
-### Configurar Dispositivo Serial
+# ## Configurar Dispositivo Serial
 
 Si necesitas comunicación serial con el dispositivo LockNode:
 
@@ -186,112 +215,122 @@ device = serial.Serial(
 )
 ```
 
-## 📊 API Endpoints
+# # 📊 API Endpoints
 
 El agente expone los siguientes endpoints:
 
 | Método | Endpoint | Descripción |
-|--------|----------|-------------|
+|- - - - - - - - |- - - - - - - - - - |- - - - - - - - - - - - - |
 | POST | `/api/locknode/connect` | Establecer conexión |
 | POST | `/api/locknode/disconnect` | Desconectar agente |
 | POST | `/api/locknode/command` | Enviar comando al dispositivo |
-| POST | `/api/locknode/upload-firmware` | Cargar firmware |
-| POST | `/api/locknode/download-firmware` | Descargar firmware |
-| GET | `/api/locknode/detect-cmsis-dap` | Detectar dispositivos CMSIS-DAP |
+| POST | `/api/locknode/upload- firmware` | Cargar firmware |
+| POST | `/api/locknode/download- firmware` | Descargar firmware |
+| GET | `/api/locknode/detect- cmsis- dap` | Detectar dispositivos CMSIS- DAP |
 | GET | `/api/locknode/firmware/list` | **NUEVO:** Listar firmwares disponibles |
 | POST | `/api/locknode/firmware/program` | **NUEVO:** Programar firmware con pyOCD |
 | GET | `/api/locknode/heartbeat` | Verificar estado (automático) |
 | GET | `/api/locknode/status` | Obtener estado completo |
 | POST | `/api/locknode/device/connect` | Conectar dispositivo físico |
 
-## 🔐 Seguridad
+# # 🔐 Seguridad
 
-### Desarrollo (HTTP)
-- ✅ Rápido y simple
-- ⚠️ Sin cifrado (solo para local)
-- ✅ No requiere certificados
+# ## Desarrollo (HTTP)
+- Rápido y simple
+- Sin cifrado (solo para local)
+- No requiere certificados
 
-### Producción (HTTPS)
-- ✅ Conexión cifrada SSL/TLS
-- ✅ Compatible con panel HTTPS
-- ⚠️ Requiere certificados
+# ## Producción (HTTPS)
+- Conexión cifrada SSL/TLS
+- Compatible con panel HTTPS
+- Requiere certificados
 
 Ver `HTTP_vs_HTTPS_GUIDE.md` para más detalles.
 
-## 🛠️ Comandos Útiles
+# #  Comandos Útiles
 
-### Ver Logs del Agente
+# ## Ver Logs del Agente
 ```bash
 python locknode_agent.py 2>&1 | tee agent.log
 ```
 
-### Verificar Puerto Disponible
+# ## Verificar Puerto Disponible
 ```bash
 # Windows
-netstat -ano | findstr :8081
+netstat - ano | findstr :8081
 
 # Si está ocupado, matar proceso
 taskkill /PID <PID> /F
 ```
 
-### Probar Conexión
+# ## Probar Conexión
 ```bash
 # Desde otra terminal
 curl http://localhost:8081/api/locknode/heartbeat
 ```
 
-## 📝 Ejemplos de Uso
+# # 📝 Ejemplos de Uso
 
-### Ejemplo 1: Comando Básico
+# ## Ejemplo 1: Comando Básico
 ```python
 # Cliente Python
 import requests
 
 response = requests.post(
     'http://localhost:8081/api/locknode/command',
-    json={'command': 'status', 'timestamp': '2025-11-24T10:00:00'}
+    json={'command': 'status', 'timestamp': '2025- 11- 24T10:00:00'}
 )
 print(response.json())
 ```
 
-### Ejemplo 2: Cargar Firmware
+# ## Ejemplo 2: Cargar Firmware
 ```python
 response = requests.post(
-    'http://localhost:8081/api/locknode/upload-firmware',
-    json={'action': 'upload', 'timestamp': '2025-11-24T10:00:00'}
+    'http://localhost:8081/api/locknode/upload- firmware',
+    json={'action': 'upload', 'timestamp': '2025- 11- 24T10:00:00'}
 )
 print(response.json())
 ```
 
-## 🐛 Troubleshooting
+# #  Troubleshooting
 
-### Error: Puerto 8081 en uso
+# ## Error: Puerto 8081 en uso
 ```bash
 # Ver qué proceso usa el puerto
-netstat -ano | findstr :8081
+netstat - ano | findstr :8081
 
 # Cambiar a otro puerto en locknode_agent.py
 ```
 
-### Error: Flask no instalado
+# ## Error: Flask no instalado
 ```bash
-pip install flask flask-cors
+pip install flask flask- cors
 ```
 
-### Error: Certificados no encontrados (HTTPS)
+# ## Error: Certificados no encontrados (HTTPS)
 ```bash
 bash generate_ssl_certs.sh
 ```
 
-### Error: No se conecta con el panel web
+# ## Error: No se conecta con el panel web
 1. Verificar que el agente esté corriendo
 2. Verificar que el puerto sea el correcto (8081)
 3. Revisar la consola del navegador (F12)
 4. Verificar que CORS esté habilitado
 
-## 📚 Archivos Relacionados
+## Archivos Relacionados
 
-### En el Proyecto
+### Documentación del Proyecto
+
+El directorio `docs/` contiene documentación detallada:
+
+- **[INICIO_RAPIDO.md](docs/INICIO_RAPIDO.md)** - Guía de inicio rápido con UV
+- **[README_UV.md](docs/README_UV.md)** - Guía completa de uso con UV
+- **[MIGRACION_UV.md](docs/MIGRACION_UV.md)** - Migración desde pip/venv a UV
+- **[RESUMEN_UV.md](docs/RESUMEN_UV.md)** - Resumen del setup con UV
+- **[CAMBIAR_VERSION_PYTHON.md](docs/CAMBIAR_VERSION_PYTHON.md)** - Cómo cambiar la versión de Python
+
+##En el Proyecto
 - `testbench_platform/src/pages/Panel_LockNode_Programacion.tsx` - Panel web
 - `testbench_platform/src/Routes.tsx` - Configuración de rutas
 - `docs/locknode-panel-setup.md` - Documentación completa
@@ -299,9 +338,10 @@ bash generate_ssl_certs.sh
 ### En este Directorio
 - `locknode_agent.py` - Agente principal HTTP
 - `locknode_agent_https.py` - Agente con SSL/TLS
-- `HTTP_vs_HTTPS_GUIDE.md` - Guía de configuración
+- `pyproject.toml` - Configuración del proyecto y dependencias
+- `.python-version` - Versión de Python bloqueada
 
-## 🔄 Actualizar Agente
+# #  Actualizar Agente
 
 Para agregar nuevos endpoints o funcionalidades:
 
@@ -317,7 +357,7 @@ def nueva_funcion():
 3. Actualizar el panel web para llamar al nuevo endpoint
 4. Actualizar esta documentación
 
-## 💡 Tips
+## Tips
 
 1. **Modo Debug:** El agente corre con `debug=True` por defecto
 2. **Auto-reload:** Flask recarga automáticamente al guardar cambios
@@ -325,23 +365,24 @@ def nueva_funcion():
 4. **CORS:** Está habilitado para todas las origenes en desarrollo
 5. **Estado:** El agente guarda su estado en la variable `agent_state`
 
-## 🎓 Recursos
+## Recursos
 
 - [Flask Documentation](https://flask.palletsprojects.com/)
 - [Flask-CORS](https://flask-cors.readthedocs.io/)
 - [pySerial](https://pyserial.readthedocs.io/)
 - [OpenSSL](https://www.openssl.org/)
+- [UV Documentation](https://docs.astral.sh/uv/)
 
-## 📞 Soporte
+## Soporte
 
 Para problemas o preguntas:
-1. Revisar `HTTP_vs_HTTPS_GUIDE.md`
-2. Revisar `docs/locknode-panel-setup.md`
+1. Revisar documentación en `docs/`
+2. Revisar `HTTP_vs_HTTPS_GUIDE.md`
 3. Contactar al equipo de desarrollo
 
 ---
 
-**Versión:** 1.0.0  
-**Última actualización:** Noviembre 2025  
-**Plataforma:** Windows 10/11  
-**Python:** 3.8+
+**Versión:** 1.0.0
+**Última actualización:** Febrero 2026
+**Plataforma:** Windows 10/11, Linux, macOS
+**Python:** 3.12+ (configurable en `.python-version`)

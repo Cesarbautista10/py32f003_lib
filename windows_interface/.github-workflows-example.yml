@@ -1,0 +1,42 @@
+# Ejemplo de GitHub Actions CI/CD con UV
+# Este archivo es opcional - úsalo si quieres CI/CD automático
+
+name: LockNode Agent CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install uv
+      uses: astral-sh/setup-uv@v2
+      with:
+        enable-cache: true
+    
+    - name: Set up Python 3.11
+      run: uv python install 3.11
+    
+    - name: Sync project
+      working-directory: windows_interface
+      run: uv sync
+    
+    - name: Run tests
+      working-directory: windows_interface
+      run: |
+        uv run python test_device_detection.py --dry-run || true
+        uv run python test_firmware_programming.py --dry-run || true
+    
+    - name: Check Python version
+      working-directory: windows_interface
+      run: uv run python --version

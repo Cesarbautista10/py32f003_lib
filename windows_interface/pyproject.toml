@@ -1,0 +1,18 @@
+[project]
+name = "locknode-agent"
+version = "1.0.0"
+description = "Agente Python para comunicación con dispositivos LockNode"
+readme = "README.md"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "Flask==3.0.0",
+    "flask-cors==4.0.0",
+    "pyusb==1.2.1",
+    "pyocd>=0.36.0",
+    "python-dateutil==2.8.2",
+]
+
+[project.optional-dependencies]
+serial = [
+    "pyserial==3.5",
+]
