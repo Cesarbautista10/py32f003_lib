@@ -545,7 +545,7 @@ def program_firmware():
             # Paso 1: Borrar el chip
             logger.info("Borrando chip...")
             erase_result = subprocess.run(
-                ['python', '-m', 'pyocd', 'erase', '-t', target, '--chip', '--config', 'Misc/pyocd.yaml'],
+                ['uv', 'run', 'pyocd', 'erase', '-t', target, '--chip', '--config', 'Misc/pyocd.yaml'],
                 capture_output=True,
                 text=True,
                 timeout=30
@@ -568,7 +568,7 @@ def program_firmware():
             # Paso 2: Cargar el firmware
             logger.info("Cargando firmware...")
             load_result = subprocess.run(
-                ['python', '-m', 'pyocd', 'load', firmware_file, '-t', target, '--config', 'Misc/pyocd.yaml'],
+                ['uv', 'run', 'pyocd', 'load', firmware_file, '-t', target, '--config', 'Misc/pyocd.yaml'],
                 capture_output=True,
                 text=True,
                 timeout=60
