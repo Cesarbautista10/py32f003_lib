@@ -194,12 +194,16 @@ Si tienes Python 3.13 instalado en Windows, pyOCD fallará con error de `collect
 # Usa:
 uv run pyocd erase --chip --config ../Misc/pyocd.yaml
 
-# O más fácil, usa el script wrapper:
+# O más fácil, usa el script wrapper (desde windows_interface/):
 # Windows:
 pyocd_uv.bat erase --chip --config ../Misc/pyocd.yaml
 
 # Linux/macOS:
 ./pyocd_uv.sh erase --chip --config ../Misc/pyocd.yaml
+
+# NOTA LINUX/macOS: Si usas pyocd directamente (sin UV), ejecuta desde la raíz:
+# cd /ruta/al/proyecto
+# pyocd erase -t py32f003x4 --chip --config ./Misc/pyocd.yaml
 ```
 
 Los scripts `pyocd_uv.bat` y `pyocd_uv.sh` son wrappers que automáticamente usan UV con Python 3.12, evitando problemas de compatibilidad.
