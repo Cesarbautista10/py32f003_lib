@@ -14,14 +14,17 @@ windows_interface/
 ├── install_uv_setup.sh         # Script de instalación de UV
 ├── start_agent_uv.sh           # Script de inicio con UV (Linux/macOS)
 ├── start_agent_uv.bat          # Script de inicio con UV (Windows)
+├── pyocd_uv.sh                 # Wrapper de pyOCD con UV (Linux/macOS)
+├── pyocd_uv.bat                # Wrapper de pyOCD con UV (Windows)
 ├── requirements.txt            # Dependencias Python
 ├── pyproject.toml              # Configuración del proyecto con UV
-├── .python-version             # Versión de Python bloqueada (3.11)
+├── .python-version             # Versión de Python bloqueada (3.12)
 ├── README.md                   # Este archivo
 ├── docs/                       # Documentación del proyecto
 │   ├── INICIO_RAPIDO.md        # Guía de inicio rápido
 │   ├── README_UV.md            # Guía completa de UV
 │   ├── MIGRACION_UV.md         # Guía de migración desde pip
+│   ├── CAMBIAR_VERSION_PYTHON.md # Guía para cambiar versión de Python
 │   └── RESUMEN_UV.md           # Resumen del setup con UV
 ├── certs/                      # Carpeta para certificados SSL
 │   ├── cert.pem
@@ -170,15 +173,36 @@ cp mi_firmware.bin windows_interface/firmware/
 
 ### Sistema
 - **Windows 10/11**
-- **Python 3.8+**
+- **Python 3.11 o 3.12** (IMPORTANTE: pyOCD no funciona en Python 3.13 debido a incompatibilidades con pyreadline)
 - OpenSSL (para HTTPS)
 
 ### Python Packages
 - `flask` - Servidor web
-- `flask- cors` - Manejo de CORS
+- `flask-cors` - Manejo de CORS
 - `pyusb` - Detección de dispositivos USB
-- `pyocd` - Detección específica de CMSIS- DAP
+- `pyocd` - Detección específica de CMSIS-DAP
 - `pyserial` - Comunicación serial con dispositivo (opcional)
+
+### Nota Importante para Windows
+Si tienes Python 3.13 instalado en Windows, pyOCD fallará con error de `collections.Callable`. 
+**Solución**: Usa el entorno UV configurado (Python 3.12) para ejecutar pyocd:
+
+```bash
+# En lugar de:
+# pyocd erase --chip ...
+
+# Usa:
+uv run pyocd erase --chip --config ../Misc/pyocd.yaml
+
+# O más fácil, usa el script wrapper:
+# Windows:
+pyocd_uv.bat erase --chip --config ../Misc/pyocd.yaml
+
+# Linux/macOS:
+./pyocd_uv.sh erase --chip --config ../Misc/pyocd.yaml
+```
+
+Los scripts `pyocd_uv.bat` y `pyocd_uv.sh` son wrappers que automáticamente usan UV con Python 3.12, evitando problemas de compatibilidad.
 
 ##  Configuración
 

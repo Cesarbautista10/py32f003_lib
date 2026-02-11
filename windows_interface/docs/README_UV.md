@@ -11,7 +11,7 @@ curl - LsSf https://astral.sh/uv/install.sh | sh
 
 # ## En Windows (PowerShell):
 ```powershell
-powershell - c "irm https://astral.sh/uv/install.ps1 | iex"
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"   
 ```
 
 # ## Verificar instalación:
