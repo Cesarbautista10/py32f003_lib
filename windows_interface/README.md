@@ -196,15 +196,18 @@ uv run pyocd erase --chip --config ../Misc/pyocd.yaml
 
 # O más fácil, usa el script wrapper (desde windows_interface/):
 # Windows (usa .bat, NO .sh):
-pyocd_uv.bat erase -t py32f003x4 --chip --config ../Misc/pyocd.yaml
+pyocd_uv.bat erase -t py32f003x4 --chip --config firmware/Misc/pyocd.yaml
+pyocd_uv.bat load firmware/blink.bin -t py32f003x4 --config firmware/Misc/pyocd.yaml
 
 # Linux/macOS (usa .sh):
-./pyocd_uv.sh erase -t py32f003x4 --chip --config ../Misc/pyocd.yaml
+./pyocd_uv.sh erase -t py32f003x4 --chip --config firmware/Misc/pyocd.yaml
+./pyocd_uv.sh load firmware/blink.bin -t py32f003x4 --config firmware/Misc/pyocd.yaml
 
 # NOTA IMPORTANTE:
 # - En Windows usa pyocd_uv.bat (incluso desde Git Bash)
-# - La ruta es ../Misc/pyocd.yaml (NO ../firmware/Misc/)
+# - La configuración está en firmware/Misc/pyocd.yaml
 # - Debes especificar -t py32f003x4 para el target
+# - Los archivos .bin deben estar en firmware/
 
 # NOTA LINUX/macOS: Si usas pyocd directamente (sin UV), ejecuta desde la raíz:
 # cd /ruta/al/proyecto
