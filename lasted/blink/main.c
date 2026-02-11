@@ -4,7 +4,7 @@
 // ═══════════════════════════════════════════════════════════
 //                   SIMPLE BLINK CONFIGURATION
 // ═══════════════════════════════════════════════════════════
-#define BLINK_INTERVAL_MS   500    // Intervalo de parpadeo en ms (500ms = 1Hz)
+#define BLINK_INTERVAL_MS   1000   // Intervalo de parpadeo en ms (1000ms = 1 segundo)
 
 // Variables globales
 uint32_t blink_last_toggle = 0;    // Timestamp del último toggle
