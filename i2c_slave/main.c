@@ -9,10 +9,13 @@
 #include "neo_spi.h"
 
 #define FLASH_SAVE_ADDR     0x08003C00  
+#define FLASH_COLOR_ADDR    0x08003D00
 #define FLASH_I2C_ADDR      0x08003E00  
 #define FLASH_CONFIG_ADDR   0x08003F00  
 #define CONFIG_USE_FLASH_I2C   0x01     
 #define CONFIG_FACTORY_DEFAULT 0x02     
+#define COLOR_MAGIC         0x434F4C31UL
+#define COLOR_SLOT_COUNT    3
 
 I2C_HandleTypeDef I2cHandle;
 uint8_t aTxBuffer[1] = {0};
@@ -35,6 +38,15 @@ uint8_t pulse_active = 0;
 uint8_t use_flash_i2c = 0;           
 uint8_t current_i2c_address = 0x00;  
 uint8_t factory_default_addr = 0x00;
+uint8_t default_colors[COLOR_SLOT_COUNT][3] = {
+  {255, 0, 0},
+  {0, 255, 0},
+  {0, 0, 255}
+};
+uint8_t color_save_step = 0;
+uint8_t color_save_pos = 0;
+uint8_t color_save_r = 0;
+uint8_t color_save_g = 0;
 volatile uint8_t i2c_rx_complete = 0;
 volatile uint8_t i2c_tx_complete = 0;
 int error_count = 0;
@@ -55,6 +67,9 @@ static void Disable_Watchdog_Temporarily(void);
 static uint32_t Get_Device_UID(void);
 static uint8_t Calculate_I2C_Address(uint32_t uid);
 static uint8_t Calculate_I2C_Address_Internal(uint32_t uid);
+static void Save_Default_Colors_To_Flash(void);
+static void Load_Default_Colors_From_Flash(void);
+static void Apply_Default_Color(uint8_t slot);
 
 
 void Save_DATA_To_Flash(uint16_t data)
@@ -328,6 +343,56 @@ static uint8_t Calculate_I2C_Address(uint32_t uid)
   }
   return addr;
 }
+
+static void Save_Default_Colors_To_Flash(void)
+{
+  HAL_FLASH_Unlock();
+
+  FLASH_EraseInitTypeDef EraseInitStruct = {0};
+  uint32_t PageError = 0;
+  EraseInitStruct.TypeErase = FLASH_TYPEERASE_PAGEERASE;
+  EraseInitStruct.PageAddress = FLASH_COLOR_ADDR;
+  EraseInitStruct.NbPages = 1;
+
+  if (HAL_FLASHEx_Erase(&EraseInitStruct, &PageError) == HAL_OK) {
+    uint32_t word0 = COLOR_MAGIC;
+    uint32_t word1 = ((uint32_t)default_colors[0][0] << 16) | ((uint32_t)default_colors[0][1] << 8) | default_colors[0][2];
+    uint32_t word2 = ((uint32_t)default_colors[1][0] << 16) | ((uint32_t)default_colors[1][1] << 8) | default_colors[1][2];
+    uint32_t word3 = ((uint32_t)default_colors[2][0] << 16) | ((uint32_t)default_colors[2][1] << 8) | default_colors[2][2];
+    HAL_FLASH_Program(FLASH_TYPEPROGRAM_PAGE, FLASH_COLOR_ADDR + 0, &word0);
+    HAL_FLASH_Program(FLASH_TYPEPROGRAM_PAGE, FLASH_COLOR_ADDR + 4, &word1);
+    HAL_FLASH_Program(FLASH_TYPEPROGRAM_PAGE, FLASH_COLOR_ADDR + 8, &word2);
+    HAL_FLASH_Program(FLASH_TYPEPROGRAM_PAGE, FLASH_COLOR_ADDR + 12, &word3);
+  }
+
+  HAL_FLASH_Lock();
+}
+
+static void Load_Default_Colors_From_Flash(void)
+{
+  uint32_t magic = *(uint32_t*)(FLASH_COLOR_ADDR + 0);
+  if (magic != COLOR_MAGIC) {
+    return;
+  }
+
+  for (uint8_t i = 0; i < COLOR_SLOT_COUNT; i++) {
+    uint32_t packed = *(uint32_t*)(FLASH_COLOR_ADDR + 4 + (i * 4));
+    default_colors[i][0] = (uint8_t)((packed >> 16) & 0xFF);
+    default_colors[i][1] = (uint8_t)((packed >> 8) & 0xFF);
+    default_colors[i][2] = (uint8_t)(packed & 0xFF);
+  }
+}
+
+static void Apply_Default_Color(uint8_t slot)
+{
+  if (slot >= COLOR_SLOT_COUNT) {
+    return;
+  }
+
+  NEO_fillAll(default_colors[slot][0], default_colors[slot][1], default_colors[slot][2]);
+  NEO_update();
+  HAL_Delay(1);
+}
 static void Disable_PF2_NRST_Function(void)
 {
   return;
@@ -384,6 +449,41 @@ static void Process_I2C_Command(void)
 {
   last_command_time = HAL_GetTick();
   uint8_t response_code = RESP_CMD_UNKNOWN;
+
+  if (color_save_step != 0)
+  {
+    if (color_save_step == 1) {
+      if (aRxBuffer[0] < COLOR_SLOT_COUNT) {
+        color_save_pos = aRxBuffer[0];
+        color_save_step = 2;
+        response_code = RESP_COLOR_STAGE_READY;
+      } else {
+        color_save_step = 0;
+        response_code = RESP_CMD_UNKNOWN;
+      }
+    } else if (color_save_step == 2) {
+      color_save_r = aRxBuffer[0];
+      color_save_step = 3;
+      response_code = RESP_COLOR_STAGE_READY;
+    } else if (color_save_step == 3) {
+      color_save_g = aRxBuffer[0];
+      color_save_step = 4;
+      response_code = RESP_COLOR_STAGE_READY;
+    } else if (color_save_step == 4) {
+      default_colors[color_save_pos][0] = color_save_r;
+      default_colors[color_save_pos][1] = color_save_g;
+      default_colors[color_save_pos][2] = aRxBuffer[0];
+      Save_Default_Colors_To_Flash();
+      color_save_step = 0;
+      response_code = RESP_COLOR_SAVED;
+    }
+
+    aTxBuffer[0] = Build_Response_With_PA0(response_code);
+    HAL_I2C_Slave_Transmit(&I2cHandle, aTxBuffer, DATA_LENGTH, 100);
+    HAL_I2C_Slave_Receive_IT(&I2cHandle, aRxBuffer, DATA_LENGTH);
+    return;
+  }
+
   if (flash_save_flag == 1)  
   {
     Save_DATA_To_Flash(aRxBuffer[0]);
@@ -438,6 +538,10 @@ static void Process_I2C_Command(void)
       response_code = RESP_I2C_FROM_UID;
     }
     break;
+  case CMD_SAVE_COLOR:
+    color_save_step = 1;
+    response_code = RESP_COLOR_STAGE_READY;
+    break;
   case CMD_RELAY_OFF:
     HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_RESET);  
     response_code = RESP_RELAY_OFF;
@@ -455,23 +559,17 @@ static void Process_I2C_Command(void)
     }
     break;
   case CMD_RED:
-    NEO_fillAll(255, 0, 0);  // Rojo
-    NEO_update();
-    HAL_Delay(1);  // Esperar a que termine transmisión SPI
+    Apply_Default_Color(0);
     response_code = RESP_NEO_RED;
     system_stable = 0;  
     break;
   case CMD_GREEN:
-    NEO_fillAll(0, 255, 0);  // Verde
-    NEO_update();
-    HAL_Delay(1);  // Esperar a que termine transmisión SPI
+    Apply_Default_Color(1);
     Refresh_Watchdog();
     response_code = RESP_NEO_GREEN;
     break;
   case CMD_BLUE:
-    NEO_fillAll(0, 0, 255);  // Azul
-    NEO_update();
-    HAL_Delay(1);  // Esperar a que termine transmisión SPI
+    Apply_Default_Color(2);
     response_code = RESP_NEO_BLUE;
     break;
   case CMD_OFF:
@@ -714,6 +812,7 @@ int main(void)
   Init_PA2_PB5_Relay();
   PWM_Init_TIM1();
   NEO_init();
+  Load_Default_Colors_From_Flash();
   Init_PF4_LED();
   
   // ═══════════════════════════════════════════════════════════

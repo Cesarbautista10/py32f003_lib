@@ -106,6 +106,7 @@
 #define CMD_SET_I2C_ADDR   0x3D         // Comando: Establecer nueva dirección I2C (se guarda en Flash)
 #define CMD_RESET_FACTORY  0x3E         // Comando: Reset factory (usar UID por defecto)
 #define CMD_GET_I2C_STATUS 0x3F         // Comando: Obtener estado I2C (Flash vs UID)
+#define CMD_SAVE_COLOR     0x46         // Comando: Guardar color por posicion (0..2)
 
 // Respuesta para comandos Flash
 #define RESPONSE_DATA      0x3C         // Respuesta: Operación Flash completada
@@ -126,6 +127,8 @@
 #define RESP_NRST_ACTIVE   0x12         // PF2 sigue como NRST (reset activo)
 #define RESP_PB0_DIGITAL   0x13         // Estado digital de PB0 enviado
 #define RESP_PB0_INITIALIZED 0x14       // PB0 inicializado como entrada digital
+#define RESP_COLOR_STAGE_READY 0x15     // Save color: etapa recibida, continuar
+#define RESP_COLOR_SAVED   0x16         // Save color: color guardado en Flash
 
 // Códigos de respuesta para indicar el estado de la operación
 //  NUEVO PROTOCOLO: Solo bits inferiores (3-0), PA4 DIGITAL en bits superiores (7-4)

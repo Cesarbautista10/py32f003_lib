@@ -1,0 +1,186 @@
+#######################################
+# Syntax Coloring MapController
+#######################################
+
+MapController    KEYWORD1
+MapCRUD          KEYWORD1
+
+# Métodos (KEYWORD2):
+begin            KEYWORD2
+initializeI2C    KEYWORD2
+scanDevices      KEYWORD2
+initializeMapping KEYWORD2
+saveMapping      KEYWORD2
+loadMapping      KEYWORD2
+clearMapping     KEYWORD2
+assignDeviceToID KEYWORD2
+moveDevice       KEYWORD2
+removeDeviceFromID KEYWORD2
+getAddressByID   KEYWORD2
+getIDByAddress   KEYWORD2
+cmdShowMapping   KEYWORD2
+cmdAutoMap       KEYWORD2
+cmdAssign        KEYWORD2
+cmdMove          KEYWORD2
+cmdRemove        KEYWORD2
+cmdClearMapping  KEYWORD2
+cmdSenseByID     KEYWORD2
+cmdSenseMaskByID KEYWORD2
+readSenseState   KEYWORD2
+interpretSenseValue KEYWORD2
+cmdSenseArrayMask KEYWORD2
+cmdSenseArrayMaskByCommand KEYWORD2
+cmdShowSenseArray KEYWORD2
+cmdShowSenseArrayByCommand KEYWORD2
+cmdFillSenseArray KEYWORD2
+cmdFillSenseArrayByCommand KEYWORD2
+cmdShowAllArrays KEYWORD2
+cmdNeoByID       KEYWORD2
+setNeoPixelByID  KEYWORD2
+setAllNeoPixels  KEYWORD2
+getNeoColorName  KEYWORD2
+cmdRelayByID     KEYWORD2
+cmdRelayOff      KEYWORD2
+cmdAllShut       KEYWORD2
+relayPulse       KEYWORD2
+relayToggle      KEYWORD2
+adcToVoltage     KEYWORD2
+cmdADCByID       KEYWORD2
+cmdADCAllByID    KEYWORD2
+readADCValue     KEYWORD2
+testDeviceCommands KEYWORD2
+cmdTestCommands  KEYWORD2
+sendCommandSafe  KEYWORD2
+sendCommandFast  KEYWORD2
+setAllRelays     KEYWORD2
+emergencyRelaysOff KEYWORD2
+setAllDevicesState KEYWORD2
+startTiming      KEYWORD2
+recordTiming     KEYWORD2
+saveDataToFlash  KEYWORD2
+readDataFromFlash KEYWORD2
+cmdFlashSave     KEYWORD2
+cmdFlashRead     KEYWORD2
+setDeviceI2CAddress KEYWORD2
+resetDeviceToFactory KEYWORD2
+getDeviceI2CStatus KEYWORD2
+cmdSetI2CAddress KEYWORD2
+cmdResetFactory  KEYWORD2
+cmdI2CStatus     KEYWORD2
+cmdDebugReset    KEYWORD2
+cmdVerifyChange  KEYWORD2
+checkDeviceCompatibility KEYWORD2
+sendCommandWithTimeout KEYWORD2
+debugResetDevice KEYWORD2
+verifyAddressChange KEYWORD2
+parseI2CAddress  KEYWORD2
+setScannedDevices KEYWORD2
+
+# Constantes (LITERAL1):
+DEFAULT_SDA          LITERAL1
+DEFAULT_SCL          LITERAL1
+DEFAULT_I2C_FREQ     LITERAL1
+MAX_DEVICES          LITERAL1
+INVALID_ADDRESS      LITERAL1
+COMMAND_DELAY_MS     LITERAL1
+CMD_RELAY_OFF        LITERAL1
+CMD_RELAY_ON         LITERAL1
+CMD_RED              LITERAL1
+CMD_GREEN            LITERAL1
+CMD_BLUE             LITERAL1
+CMD_OFF              LITERAL1
+CMD_TOGGLE           LITERAL1
+CMD_PA4_DIGITAL      LITERAL1
+CMD_ADC_PA0_HSB      LITERAL1
+CMD_ADC_PA0_LSB      LITERAL1
+
+# New MapController Keywords
+# Device Management
+checkCompatibility      KEYWORD2
+listDevices             KEYWORD2
+pingDevice              KEYWORD2
+parseAddress            KEYWORD2
+recoverI2CBus           KEYWORD2
+showDeviceInfo          KEYWORD2
+showDeviceUID           KEYWORD2
+getDeviceUID            KEYWORD2
+getDeviceTypeName       KEYWORD2
+
+# Continuous Testing
+startContinuousTest     KEYWORD2
+stopContinuousTest      KEYWORD2
+runContinuousTest       KEYWORD2
+testDevice              KEYWORD2
+setTestInterval         KEYWORD2
+getTestInterval         KEYWORD2
+getTestMode             KEYWORD2
+isContinuousTestActive  KEYWORD2
+getCycleCount           KEYWORD2
+showStatistics          KEYWORD2
+resetStatistics         KEYWORD2
+testIntervalEffect      KEYWORD2
+testLongIntervalProblem KEYWORD2
+
+# Device Commands
+sendBasicCommand        KEYWORD2
+i2cReadByteWithRetry    KEYWORD2
+readPA4Digital          KEYWORD2
+readADC                 KEYWORD2
+testAllCommands         KEYWORD2
+
+# Command Wrappers
+cmdRelay               KEYWORD2
+cmdToggle              KEYWORD2
+cmdNeoPixel            KEYWORD2
+cmdNeoRed              KEYWORD2
+cmdNeoGreen            KEYWORD2
+cmdNeoBlue             KEYWORD2
+cmdNeoWhite            KEYWORD2
+cmdNeoOff              KEYWORD2
+cmdPWM                 KEYWORD2
+cmdPWMOff              KEYWORD2
+cmdPWM25               KEYWORD2
+cmdPWM50               KEYWORD2
+cmdPWM75               KEYWORD2
+cmdPWM100              KEYWORD2
+cmdReadPA4             KEYWORD2
+cmdReadADC             KEYWORD2
+
+# I2C Address Management
+changeI2CAddress       KEYWORD2
+factoryReset           KEYWORD2
+checkI2CStatus         KEYWORD2
+resetDevice            KEYWORD2
+resetAllDevices        KEYWORD2
+verifyAddressChange    KEYWORD2
+
+# New Constants
+CMD_NEO_WHITE          LITERAL1
+CMD_PWM_OFF            LITERAL1
+CMD_PWM_25             LITERAL1
+CMD_PWM_50             LITERAL1
+CMD_PWM_75             LITERAL1
+CMD_PWM_100            LITERAL1
+CMD_GET_DEVICE_ID      LITERAL1
+CMD_GET_FLASH_SIZE     LITERAL1
+CMD_GET_UID_BYTE0      LITERAL1
+CMD_GET_UID_BYTE1      LITERAL1
+CMD_GET_UID_BYTE2      LITERAL1
+CMD_GET_UID_BYTE3      LITERAL1
+CMD_ADC_PA0_I2C        LITERAL1
+CMD_WATCHDOG_RESET     LITERAL1
+DEFAULT_TEST_INTERVAL  LITERAL1
+MIN_TEST_INTERVAL      LITERAL1
+MAX_TEST_INTERVAL      LITERAL1
+
+# Test Modes
+TEST_MODE_PA4_ONLY     LITERAL1
+TEST_MODE_TOGGLE_ONLY  LITERAL1
+TEST_MODE_BOTH         LITERAL1
+TEST_MODE_NEO_CYCLE    LITERAL1
+TEST_MODE_PWM_TONES    LITERAL1
+TEST_MODE_ADC_PA0      LITERAL1
+
+# Structures
+DeviceInfo             KEYWORD1
+DeviceStats            KEYWORD1

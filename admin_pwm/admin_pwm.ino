@@ -7,8 +7,8 @@
 
 // Configuracion I2C - Wire1 con GPIO2 (SDA) y GPIO3 (SCL)
 #define WIRE Wire1
-#define I2C_SDA 2
-#define I2C_SCL 3
+#define I2C_SDA 21
+#define I2C_SCL 22
 #define I2C_FREQ 100000  // 100 kHz - SEGURO para inicialización (luego se puede subir a 400kHz)
 
 // ═══════════════════════════════════════════════════════════
@@ -66,11 +66,14 @@
 #define CMD_SET_I2C_ADDR   0x3D   // Establecer nueva dirección I2C (se guarda en Flash)
 #define CMD_RESET_FACTORY  0x3E   // Reset factory (usar UID por defecto)
 #define CMD_GET_I2C_STATUS 0x3F   // Obtener estado I2C (Flash vs UID)
+#define CMD_SAVE_COLOR     0x46   // Guardar color por slot (1..3 en admin, 0..2 en esclavo)
 
 #define RESP_I2C_ADDR_SET  0x0D   // Nueva dirección I2C establecida
 #define RESP_FACTORY_RESET 0x0E   // Reset factory ejecutado (usar UID)
 #define RESP_I2C_FROM_FLASH 0x0F  // I2C usando dirección desde Flash
 #define RESP_I2C_FROM_UID  0x0A   // I2C usando dirección desde UID
+#define RESP_COLOR_STAGE_READY 0x15 // Etapa de save_color lista
+#define RESP_COLOR_SAVED   0x16   // Color guardado en Flash
 
 // Variables globales
 uint8_t found_devices[128];
@@ -179,9 +182,9 @@ void setup() {
   if (!i2c_safe_mode) {
     // Inicializar I2C con Wire1
     // RP2040 / RP2350: configurar pines ANTES de begin()
-    WIRE.setSDA(I2C_SDA);
-    WIRE.setSCL(I2C_SCL);
-    WIRE.begin();
+    // WIRE.setSDA(I2C_SDA);
+    // WIRE.setSCL(I2C_SCL);
+    WIRE.begin(I2C_SDA,I2C_SCL);
     WIRE.setClock(I2C_FREQ);
   
     Serial.println("[OK] I2C inicializado sin bloquear USB");
@@ -320,7 +323,9 @@ void processCommand(String cmd) {
     neoOff();
   } else if (cmd.startsWith("ch ")) {
     changeI2CAddress(cmd);
-  } else if (cmd == "help" || cmd == "h") {
+  } else if (cmd.startsWith("save_color ")) {
+     saveColorPreset(cmd);
+  }else if (cmd == "help" || cmd == "h") {
     showHelp();
   } else {
     Serial.println("ERROR: Comando desconocido. Usa 'help' o 'menu' para ver comandos.");
@@ -344,15 +349,17 @@ void showMenu() {
   Serial.println("  off XX         - Apagar relay");
   Serial.println("  pwm XX NIVEL   - PWM (25, 50, 75, 100, off)");
   Serial.println("  silence        - Apagar PWM en todos");
-  Serial.println("  neo XX COLOR   - NeoPixel (red, green, blue, white, off)");
+  Serial.println("  neo XX COLOR   - NeoPixel (red/green/blue/white/off o 1/2/3/4/0)");
   Serial.println("  ch XX YY       - Cambiar dir I2C (XX=old, YY=new)");
+  Serial.println("  save_color A P R G B - Guardar color por slot (1..3)");
   Serial.println("  help           - Mostrar ayuda completa");
   Serial.println("\nEjemplos:");
   Serial.println("  s              (scan de dispositivos)");
   Serial.println("  menu           (mostrar este menu)");
   Serial.println("  pwm 20 50      (PWM 50% en 0x20)");
   Serial.println("  silence        (apagar PWM en todos)");
-  Serial.println("  neo 20 red     (NeoPixel rojo en 0x20)");
+  Serial.println("  neo 20 1       (NeoPixel rojo en 0x20)");
+  Serial.println("  save_color 20 1 0x00 0xff 0x60");
   Serial.println("");
 }
 
@@ -843,6 +850,19 @@ uint8_t parseHex(String hex_str) {
   return (uint8_t)addr;
 }
 
+bool parseByteAuto(String value_str, uint8_t* out) {
+  value_str.trim();
+  char* endptr;
+  long value = strtol(value_str.c_str(), &endptr, 0);
+
+  if (*endptr != '\0' || value < 0 || value > 0xFF) {
+    return false;
+  }
+
+  *out = (uint8_t)value;
+  return true;
+}
+
 void startScanLoop() {
   scan_loop_active = true;
   last_scan_time = millis();
@@ -931,152 +951,22 @@ void pwmCommand(String cmd) {
   }
 }
 
-/*
-// Funciones deshabilitadas - Causan problemas de estabilidad I2C
-void playNote(String cmd) {
-  // Formato: "note XX NOTA"
-  // XX = dirección hex, NOTA = do, re, mi, fa, sol, la, si
-  cmd.trim();
-  int space = cmd.indexOf(' ', 5);
-  
-  if (space == -1) {
-    Serial.println("ERROR: Formato incorrecto");
-    Serial.println("Uso: note XX NOTA");
-    Serial.println("Ejemplo: note 20 la  (Nota LA en 0x20)");
-    Serial.println("Notas: do, re, mi, fa, sol, la, si");
-    return;
-  }
-  
-  String addr_str = cmd.substring(5, space);
-  String note_str = cmd.substring(space + 1);
-  addr_str.trim();
-  note_str.trim();
-  note_str.toLowerCase();
-  
-  uint8_t address = parseHex(addr_str);
-  if (address == 0) {
-    Serial.println("ERROR: Direccion invalida");
-    return;
-  }
-  
-  uint8_t note_cmd = 0;
-  String note_name = "";
-  int freq = 0;
-  
-  if (note_str == "do") {
-    note_cmd = CMD_TONE_DO;
-    note_name = "DO";
-    freq = 261;
-  } else if (note_str == "re") {
-    note_cmd = CMD_TONE_RE;
-    note_name = "RE";
-    freq = 294;
-  } else if (note_str == "mi") {
-    note_cmd = CMD_TONE_MI;
-    note_name = "MI";
-    freq = 330;
-  } else if (note_str == "fa") {
-    note_cmd = CMD_TONE_FA;
-    note_name = "FA";
-    freq = 349;
-  } else if (note_str == "sol") {
-    note_cmd = CMD_TONE_SOL;
-    note_name = "SOL";
-    freq = 392;
-  } else if (note_str == "la") {
-    note_cmd = CMD_TONE_LA;
-    note_name = "LA";
-    freq = 440;
-  } else if (note_str == "si") {
-    note_cmd = CMD_TONE_SI;
-    note_name = "SI";
-    freq = 494;
-  } else {
-    Serial.println("ERROR: Nota invalida. Usa: do, re, mi, fa, sol, la, si");
-    return;
-  }
-  
-  if (sendCommand(address, note_cmd)) {
-    Serial.printf("[OK] Nota %s (%dHz) en 0x%02X\n", note_name.c_str(), freq, address);
-  } else {
-    Serial.printf("[FAIL] No se pudo reproducir nota en 0x%02X\n", address);
-  }
-}
-
-void playAlert(String cmd) {
-  // Formato: "alert XX TIPO"
-  // XX = dirección hex, TIPO = success, ok, warning, alert
-  cmd.trim();
-  int space = cmd.indexOf(' ', 6);
-  
-  if (space == -1) {
-    Serial.println("ERROR: Formato incorrecto");
-    Serial.println("Uso: alert XX TIPO");
-    Serial.println("Ejemplo: alert 20 ok  (Alerta OK en 0x20)");
-    Serial.println("Tipos: success, ok, warning, alert");
-    return;
-  }
-  
-  String addr_str = cmd.substring(6, space);
-  String alert_str = cmd.substring(space + 1);
-  addr_str.trim();
-  alert_str.trim();
-  alert_str.toLowerCase();
-  
-  uint8_t address = parseHex(addr_str);
-  if (address == 0) {
-    Serial.println("ERROR: Direccion invalida");
-    return;
-  }
-  
-  uint8_t alert_cmd = 0;
-  String alert_name = "";
-  int freq = 0;
-  
-  if (alert_str == "success") {
-    alert_cmd = CMD_SUCCESS;
-    alert_name = "SUCCESS";
-    freq = 800;
-  } else if (alert_str == "ok") {
-    alert_cmd = CMD_OK;
-    alert_name = "OK";
-    freq = 1000;
-  } else if (alert_str == "warning") {
-    alert_cmd = CMD_WARNING;
-    alert_name = "WARNING";
-    freq = 1200;
-  } else if (alert_str == "alert") {
-    alert_cmd = CMD_ALERT;
-    alert_name = "ALERT";
-    freq = 1500;
-  } else {
-    Serial.println("ERROR: Tipo invalido. Usa: success, ok, warning, alert");
-    return;
-  }
-  
-  if (sendCommand(address, alert_cmd)) {
-    Serial.printf("[OK] Alerta %s (%dHz) en 0x%02X\n", alert_name.c_str(), freq, address);
-  } else {
-    Serial.printf("[FAIL] No se pudo reproducir alerta en 0x%02X\n", address);
-  }
-}
-*/
-
 // ═══════════════════════════════════════════════════════════
 //           FUNCIONES NEOPIXEL
 // ═══════════════════════════════════════════════════════════
 
 void neoCommand(String cmd) {
   // Formato: "neo XX COLOR"
-  // XX = dirección hex, COLOR = red, green, blue, white, off
+  // XX = dirección hex, COLOR = red/green/blue/white/off o 1/2/3/4/0
   cmd.trim();
   int space = cmd.indexOf(' ', 4);
   
   if (space == -1) {
     Serial.println("ERROR: Formato incorrecto");
     Serial.println("Uso: neo XX COLOR");
-    Serial.println("Ejemplo: neo 20 red  (NeoPixel rojo en 0x20)");
+    Serial.println("Ejemplo: neo 20 1  (NeoPixel rojo en 0x20)");
     Serial.println("Colores: red, green, blue, white, off");
+    Serial.println("Numeros: 1=red, 2=green, 3=blue, 4=white, 0=off");
     return;
   }
   
@@ -1098,20 +988,36 @@ void neoCommand(String cmd) {
   if (color_str == "red") {
     neo_cmd = CMD_RED;
     color_name = "ROJO";
+  } else if (color_str == "1") {
+    neo_cmd = CMD_RED;
+    color_name = "ROJO";
   } else if (color_str == "green") {
+    neo_cmd = CMD_GREEN;
+    color_name = "VERDE";
+  } else if (color_str == "2") {
     neo_cmd = CMD_GREEN;
     color_name = "VERDE";
   } else if (color_str == "blue") {
     neo_cmd = CMD_BLUE;
     color_name = "AZUL";
+  } else if (color_str == "3") {
+    neo_cmd = CMD_BLUE;
+    color_name = "AZUL";
   } else if (color_str == "white") {
+    neo_cmd = CMD_WHITE;
+    color_name = "BLANCO";
+  } else if (color_str == "4") {
     neo_cmd = CMD_WHITE;
     color_name = "BLANCO";
   } else if (color_str == "off") {
     neo_cmd = CMD_OFF;
     color_name = "APAGADO";
+  } else if (color_str == "0") {
+    neo_cmd = CMD_OFF;
+    color_name = "APAGADO";
   } else {
     Serial.println("ERROR: Color invalido. Usa: red, green, blue, white, off");
+    Serial.println("       O numeros: 1=red, 2=green, 3=blue, 4=white, 0=off");
     return;
   }
   
@@ -1263,7 +1169,7 @@ void changeI2CAddress(String cmd) {
   
   if (error != 0) {
     Serial.printf("[FAIL] Error I2C: %d\n", error);
-    Serial.println("⚠️  El dispositivo no respondió. Verifica:");
+    Serial.println("  El dispositivo no respondió. Verifica:");
     Serial.println("   - Dirección correcta (usa 'scan' para confirmar)");
     Serial.println("   - Dispositivo conectado y funcionando");
     return;
@@ -1296,7 +1202,7 @@ void changeI2CAddress(String cmd) {
   
   if (error != 0) {
     Serial.printf("[FAIL] Error I2C: %d\n", error);
-    Serial.println("⚠️  No se pudo completar el cambio");
+    Serial.println("  No se pudo completar el cambio");
     return;
   }
   
@@ -1310,17 +1216,17 @@ void changeI2CAddress(String cmd) {
   }
   
   if (response == 0x0D) {  // RESP_I2C_ADDR_SET
-    Serial.println("[OK] ✅ Guardado en Flash");
+    Serial.println("[OK]  Guardado en Flash");
   } else {
     Serial.printf("[WARN] Respuesta: 0x%02X\n", response);
   }
   
   Serial.println("");
   Serial.println("╔════════════════════════════════════════════╗");
-  Serial.println("║  ✅ CAMBIO DE DIRECCIÓN COMPLETADO        ║");
+  Serial.println("║   CAMBIO DE DIRECCIÓN COMPLETADO        ║");
   Serial.println("╚════════════════════════════════════════════╝");
   Serial.println("");
-  Serial.println("⚠️  IMPORTANTE - PRÓXIMOS PASOS:");
+  Serial.println("  IMPORTANTE - PRÓXIMOS PASOS:");
   Serial.println("   1. La nueva dirección está GUARDADA EN FLASH");
   Serial.println("   2. DEBES RESETEAR el dispositivo para aplicar");
   Serial.println("   3. Opciones de reset:");
@@ -1334,6 +1240,105 @@ void changeI2CAddress(String cmd) {
   Serial.println("   2. Ejecuta: scan");
   Serial.printf("   3. Busca la dirección 0x%02X en la lista\n", newAddr);
   Serial.println("");
+}
+
+void saveColorPreset(String cmd) {
+  // Formato: save_color <addr> <pos> <r> <g> <b>
+  cmd.trim();
+
+  String tokens[6];
+  int token_count = 0;
+  int i = 0;
+  while (i < cmd.length() && token_count < 6) {
+    while (i < cmd.length() && cmd.charAt(i) == ' ') {
+      i++;
+    }
+    if (i >= cmd.length()) {
+      break;
+    }
+
+    int start = i;
+    while (i < cmd.length() && cmd.charAt(i) != ' ') {
+      i++;
+    }
+    tokens[token_count++] = cmd.substring(start, i);
+  }
+
+  if (token_count < 6 || tokens[0] != "save_color") {
+    Serial.println("[ERROR] Formato: save_color <addr> <pos> <r> <g> <b>");
+    Serial.println("        pos: 1=slot rojo, 2=slot verde, 3=slot azul");
+    Serial.println("        r/g/b: 0..255 (decimal) o 0x00..0xFF");
+    return;
+  }
+
+  String addr_str = tokens[1];
+  String pos_str = tokens[2];
+  String r_str = tokens[3];
+  String g_str = tokens[4];
+  String b_str = tokens[5];
+
+  addr_str.trim();
+  pos_str.trim();
+  r_str.trim();
+  g_str.trim();
+  b_str.trim();
+
+  uint8_t addr = parseHex(addr_str);
+  if (addr == 0) {
+    Serial.println("[ERROR] Direccion invalida (0x08-0x77)");
+    return;
+  }
+
+  uint8_t pos_user = 0;
+  uint8_t pos = 0;
+  uint8_t r = 0;
+  uint8_t g = 0;
+  uint8_t b = 0;
+
+  if (!parseByteAuto(pos_str, &pos_user) || pos_user < 1 || pos_user > 3) {
+    Serial.println("[ERROR] Posicion invalida. Usa 1, 2 o 3");
+    return;
+  }
+  pos = (uint8_t)(pos_user - 1);
+  if (!parseByteAuto(r_str, &r) || !parseByteAuto(g_str, &g) || !parseByteAuto(b_str, &b)) {
+    Serial.println("[ERROR] RGB invalido. Usa 0..255 o 0x00..0xFF");
+    return;
+  }
+
+  Serial.println("\n━━━ SAVE COLOR PRESET ━━━");
+  Serial.printf("Dispositivo 0x%02X, slot %u, RGB=(%u,%u,%u)\n", addr, pos_user, r, g, b);
+
+  if (!sendCommand(addr, CMD_SAVE_COLOR)) {
+    Serial.println("[FAIL] No se pudo iniciar save_color");
+    return;
+  }
+
+  delay(5);
+  if (!sendCommand(addr, pos)) {
+    Serial.println("[FAIL] No se pudo enviar posicion");
+    return;
+  }
+
+  delay(5);
+  if (!sendCommand(addr, r)) {
+    Serial.println("[FAIL] No se pudo enviar canal R");
+    return;
+  }
+
+  delay(5);
+  if (!sendCommand(addr, g)) {
+    Serial.println("[FAIL] No se pudo enviar canal G");
+    return;
+  }
+
+  delay(5);
+  if (!sendCommand(addr, b)) {
+    Serial.println("[FAIL] No se pudo enviar canal B");
+    return;
+  }
+
+  Serial.println("[OK] Color guardado en Flash");
+  Serial.println("Usa comandos red/green/blue para probar los 3 slots.");
 }
 
 void showHelp() {
@@ -1371,7 +1376,7 @@ void showHelp() {
   Serial.println("  silence        - Apagar PWM en todos los dispositivos");
   Serial.println("");
   Serial.println("NEOPIXEL:");
-  Serial.println("  neo XX COLOR   - Control NeoPixel (red, green, blue, white, off)");
+  Serial.println("  neo XX COLOR   - Control NeoPixel (red/green/blue/white/off o 1/2/3/4/0)");
   Serial.println("  red XX         - NeoPixel rojo");
   Serial.println("  green XX       - NeoPixel verde");
   Serial.println("  blue XX        - NeoPixel azul");
@@ -1383,6 +1388,9 @@ void showHelp() {
   Serial.println("                   XX = dirección actual (hex)");
   Serial.println("                   YY = nueva dirección (hex)");
   Serial.println("                   (se guarda en Flash, requiere reset)");
+  Serial.println("  save_color A P R G B - Guardar color por slot en Flash");
+  Serial.println("                   P: 1=red slot, 2=green slot, 3=blue slot");
+  Serial.println("                   R/G/B: decimal o 0x00..0xFF");
   Serial.println("");
   Serial.println("FORMATO:");
   Serial.println("  XX = Direccion I2C en hexadecimal");
@@ -1400,12 +1408,13 @@ void showHelp() {
   Serial.println("  dstats         → Ver estadísticas PA0");
   Serial.println("  pwm 20 50      → PWM 50% (500Hz) en 0x20");
   Serial.println("  silence        → Apagar PWM en todos");
-  Serial.println("  neo 20 red     → NeoPixel rojo en 0x20");
+  Serial.println("  neo 20 1       → NeoPixel rojo en 0x20");
   Serial.println("  red 20         → NeoPixel rojo en 0x20");
   Serial.println("  neooff         → Apagar NeoPixel en todos");
   Serial.println("  t 20           → Pulso en 0x20");
   Serial.println("  on 32          → Encender en 0x32");
   Serial.println("  off 20         → Apagar relay en 0x20");
   Serial.println("  ch 19 25       → Cambiar 0x19 a 0x25");
+  Serial.println("  save_color 20 1 0x00 0xff 0x60 → Slot 1 personalizado");
   Serial.println("");
 }
