@@ -5,11 +5,6 @@
  * for your board if needed.
  */
 
-/*
- * Blink example for PY32F003 using libopencm3.
- * Toggles PB5 (LED) using HSI = 8 MHz.
- */
-
 #include <libopencm3/py32/rcc.h>
 #include <libopencm3/py32/gpio.h>
 
