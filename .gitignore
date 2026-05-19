@@ -1,5 +1,7 @@
 # Build artifacts
 Build/*
+build/
+out/
 *.o
 *.elf
 *.hex

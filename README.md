@@ -1,41 +1,191 @@
-#  Locknode V8 - PY32F003 Firmware Project
+# PY32F003 + libopencm3
 
-[![Platform](https://img.shields.io/badge/Platform-PY32F003-blue.svg)](https://www.puyasemi.com/)
-[![I2C](https://img.shields.io/badge/Interface-I2C-green.svg)](https://en.wikipedia.org/wiki/I%C2%B2C)
-[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+This project supports building and flashing PY32F003 firmware with a CMake workflow similar to pico-sdk.
 
-Firmware avanzado para microcontrolador **PY32F003** con gestión I2C inteligente, control de relés, NeoPixels, ADC y GPIO. Diseñado para sistemas IoT distribuidos con direccionamiento dinámico.
+## Quick Links
 
----
+- **Full documentation**: See [docs/INDEX.md](docs/INDEX.md)
+- **Getting started**: [Setup](docs/SETUP.md) → [Build](docs/BUILD.md) → [Flash](docs/FLASH.md)
+- **Examples**: [Blink and UART](docs/EXAMPLES.md)
+- **Hardware setup**: [Pinouts and connections](docs/HARDWARE.md)
+- **Stuck?**: [Troubleshooting](docs/TROUBLESHOOTING.md)
 
-##  Tabla de Contenidos
+## Requirements
 
-- [Características](#-características)
-- [Versiones de Firmware](#-versiones-de-firmware)
-- [Estructura del Proyecto](#-estructura-del-proyecto)
-- [Herramientas de Administración](#-herramientas-de-administración)
-- [Instalación](#-instalación)
-- [Compilación](#-compilación)
-- [Flasheo](#-flasheo)
-- [Comandos I2C](#-comandos-i2c)
-- [Hardware Soportado](#-hardware-soportado)
-- [Contribuir](#-contribuir)
+- arm-none-eabi-gcc
+- cmake 3.16+
+- make or gmake
+- pyocd
 
----
+## Project Layout
 
-## Características
+- examples/
+  - blink.c
+  - uart.c
+- libopencm3/
+- cmake/
+  - toolchain-arm-none-eabi.cmake
+- pyocd-packs/
+  - Puya.PY32.pack (pyOCD device pack)
+- build/ (recommended build directory)
 
-### **Core Features**
-- **Gestión I2C Dinámica**: Cambio de dirección I2C en tiempo de ejecución con persistencia en Flash
-- **Control de Relé**: Comandos ON/OFF y toggle con protección temporal
-- **NeoPixels RGB**: Control de LEDs direccionables (WS2812B compatible)
-- **Lectura ADC**: ADC de 12 bits en PA0 con respuesta I2C
-- **GPIO Digital**: Lectura de entrada PA4 con debounce por hardware
-- **UID Único**: Dirección I2C automática basada en UID del chip
+## Quick Start
 
-### **Advanced Features**
-- **Factory Reset**: Restaurar dirección UID por defecto
-- **Estado I2C**: Consultar origen de dirección (Flash vs UID)
-- **Indicación Sonora**: Feedback audible del estado de inicialización
-- **Watchdog Reset**: Reset por comando con timeout seguro
-- **Flash Protegida**: Manejo robusto de escritura en Flash con verificación
+### Build everything in 3 steps
+
+```bash
+# 1) Build libopencm3 (one-time)
+cd libopencm3
+make TARGETS=py32/f0
+cd ..
+
+# 2) Create and enter build directory
+mkdir build
+cd build
+
+# 3) Configure and build all examples
+cmake -DCMAKE_TOOLCHAIN_FILE=../cmake/toolchain-arm-none-eabi.cmake ..
+cmake --build . -j
+```
+
+This creates `blink.elf`, `uart.elf`, and all `.bin`/`.hex` files in `build/`.
+
+### Flash firmware
+
+From the `build/` directory:
+
+```bash
+# Flash and reset blink
+cmake --build . --target flash_reset_blink -j
+
+# Flash and reset uart
+cmake --build . --target flash_reset_uart -j
+```
+
+## Example Selection
+
+Use `APP` in CMake:
+
+- `-DAPP=blink`
+- `-DAPP=uart`
+- `-DAPP=all` (build all examples)
+
+## Recommended Build Flow (pico-sdk style)
+
+### 1) Build libopencm3 first
+
+```bash
+cd libopencm3
+make TARGETS=py32/f0
+```
+
+### 2) Configure and build
+
+#### Blink
+
+```bash
+cd ..
+cmake -S . -B build/blink -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-arm-none-eabi.cmake -DAPP=blink
+cmake --build build/blink -j
+```
+
+Artifacts are generated in `build/blink/`:
+
+- blink.elf
+- blink.bin
+- blink.hex
+
+#### UART
+
+```bash
+cmake -S . -B build/uart -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-arm-none-eabi.cmake -DAPP=uart
+cmake --build build/uart -j
+```
+
+Artifacts are generated in `build/uart/`:
+
+- uart.elf
+- uart.bin
+- uart.hex
+
+#### Build all examples
+
+```bash
+cmake -S . -B build/all -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-arm-none-eabi.cmake -DAPP=all
+cmake --build build/all -j
+```
+
+## Flash Targets
+
+### Single-app build (`APP=blink` or `APP=uart`)
+
+Global aliases are available:
+
+- `flash`
+- `flash-reset`
+
+Example:
+
+```bash
+cmake --build build/uart --target flash-reset -j
+```
+
+### Multi-app build (`APP=all`)
+
+Per-example targets are available:
+
+- `flash_blink`
+- `flash_uart`
+- `flash_reset_blink`
+- `flash_reset_uart`
+
+Example:
+
+```bash
+cmake --build build/all --target flash_reset_uart -j
+```
+
+## pyOCD Settings
+
+Default values:
+
+- target: `py32f003x4`
+- config: `build/pyocd.yaml` (auto-generated, not committed)
+
+The `pyocd.yaml` file is automatically created in the `build/` directory on first `cmake`. Do not edit it manually.
+
+Override via CMake:
+
+```bash
+cmake -S . -B build/uart \
+  -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-arm-none-eabi.cmake \
+  -DAPP=uart \
+  -DPYOCD_TARGET=py32f003x4 \
+  -DPYOCD_CONFIG=build/uart/pyocd.yaml
+```
+
+## UART Example Details
+
+- UART: USART2
+- TX: PA0 (AF9)
+- RX: PA1 (AF9)
+- Baudrate: 115200
+- Behavior: echo incoming characters
+- Includes startup stabilization to reduce garbled text after reset
+
+## Troubleshooting
+
+### `build/... is not a directory`
+
+Configure first:
+
+```bash
+cmake -S . -B build/uart -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-arm-none-eabi.cmake -DAPP=uart
+```
+
+### Garbled UART text at startup
+
+- Verify terminal is 115200 8N1
+- Verify common GND between board and USB-UART adapter
+- Verify TX/RX are crossed correctly
+- As a test, reduce baudrate to 57600
