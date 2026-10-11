@@ -183,9 +183,8 @@ static void i2c_slave_setup(void)
     rcc_periph_clock_enable(RCC_SYSCFG);
     rcc_periph_clock_enable(RCC_I2C1);
 
-    /* PB6=SCL and PA10=SDA use AF6. Disable their SWD pad aliases. */
-    gpio_mode_setup(GPIOA, GPIO_MODE_ANALOG, GPIO_PUPD_NONE, GPIO13 | GPIO14);
-
+    /* Configure only PB6=SCL and PA10=SDA. PA13/SWDIO and PA14/SWCLK
+     * remain untouched so firmware can still be loaded through SWD. */
     gpio_mode_setup(GPIOB, GPIO_MODE_AF, GPIO_PUPD_NONE, GPIO6);
     gpio_set_output_options(GPIOB, GPIO_OTYPE_OD, GPIO_OSPEED_HIGH, GPIO6);
     gpio_set_af(GPIOB, GPIO_AF6, GPIO6);

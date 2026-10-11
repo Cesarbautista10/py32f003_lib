@@ -17,6 +17,9 @@ ejemplos usan inicialmente la dirección I2C de 7 bits `0x20`. Para cambiarla,
 edita `I2C_SLAVE_ADDRESS` al principio del archivo C y `SLAVE_ADDRESS` en el
 sketch Arduino correspondiente.
 
+Los ejemplos configuran solamente PB6/SCL y PA10/SDA. No modifican PA13/SWDIO
+ni PA14/SWCLK, por lo que la interfaz de programación SWD permanece habilitada.
+
 ## Protocolo pequeño
 
 Los tres ejemplos usan el registro `0x01` y un `switch` en
