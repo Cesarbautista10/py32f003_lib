@@ -24,8 +24,8 @@ Demonstrates basic GPIO control and timing on the PY32F003.
 
 ### Behavior
 
-- Toggles PB5 every ~50ms (400,000 clock cycles at 8MHz)
-- Creates visible LED blink pattern
+- Toggles PB5 every 1000 ms using the Cortex-M SysTick timer
+- Keeps the LED on for one second and off for one second
 
 ### Build
 
@@ -45,7 +45,7 @@ cmake --build . -j
 ```c
 while (1) {
     gpio_toggle(GPIOB, GPIO5);
-    for (uint32_t i = 0; i < 400000; i++);
+    delay_ms(1000);
 }
 ```
 
