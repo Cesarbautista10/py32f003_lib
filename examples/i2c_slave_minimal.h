@@ -34,11 +34,11 @@
 
 #define I2C_CR1_PE_BIT          (1U << 0)
 #define I2C_CR1_ACK_BIT         (1U << 10)
+#define I2C_CR1_SWRST_BIT       (1U << 15)
 #define I2C_CR2_ITERREN_BIT     (1U << 8)
 #define I2C_CR2_ITEVTEN_BIT     (1U << 9)
 #define I2C_CR2_ITBUFEN_BIT     (1U << 10)
 #define I2C_SR1_ADDR_BIT        (1U << 1)
-#define I2C_SR1_BTF_BIT         (1U << 2)
 #define I2C_SR1_STOPF_BIT       (1U << 4)
 #define I2C_SR1_RXNE_BIT        (1U << 6)
 #define I2C_SR1_TXE_BIT         (1U << 7)
@@ -48,6 +48,7 @@
 #define I2C_SR1_OVR_BIT         (1U << 11)
 #define I2C_SR1_PECERR_BIT      (1U << 12)
 #define I2C_SR2_TRA_BIT         (1U << 2)
+#define I2C_CCR_FS_BIT          (1U << 15)
 #define I2C_ERROR_BITS          (I2C_SR1_BERR_BIT | I2C_SR1_ARLO_BIT | \
                                  I2C_SR1_OVR_BIT | I2C_SR1_PECERR_BIT)
 
@@ -115,30 +116,82 @@ static uint8_t i2c_take_write(uint8_t *data, uint8_t capacity)
     return length;
 }
 
+/* Register-level setup adapted from the proven TEMT6000 direct-I2C driver. */
+static void i2c_direct_configure(void)
+{
+    uint32_t peripheral_clock_mhz = rcc_apb_frequency / 1000000U;
+    uint32_t ccr;
+
+    if (peripheral_clock_mhz < 2U) {
+        peripheral_clock_mhz = 2U;
+    }
+
+    I2C_CR1_REG = 0U;
+    I2C_CR2_REG = peripheral_clock_mhz;
+    I2C_OAR1_REG = (I2C_SLAVE_ADDRESS << 1) & 0xFEU;
+
+    if (I2C_BUS_FREQUENCY_HZ >= 400000U) {
+        ccr = rcc_apb_frequency / (3U * I2C_BUS_FREQUENCY_HZ);
+        if (ccr == 0U) {
+            ccr = 1U;
+        }
+        I2C_CCR_REG = I2C_CCR_FS_BIT | ccr;
+        I2C_TRISE_REG = ((peripheral_clock_mhz * 300U) / 1000U) + 1U;
+    } else {
+        ccr = rcc_apb_frequency / (2U * I2C_BUS_FREQUENCY_HZ);
+        if (ccr < 4U) {
+            ccr = 4U;
+        }
+        I2C_CCR_REG = ccr;
+        I2C_TRISE_REG = peripheral_clock_mhz + 1U;
+    }
+
+    I2C_CR1_REG = I2C_CR1_PE_BIT | I2C_CR1_ACK_BIT;
+    I2C_CR2_REG = peripheral_clock_mhz | I2C_CR2_ITERREN_BIT |
+                  I2C_CR2_ITEVTEN_BIT | I2C_CR2_ITBUFEN_BIT;
+}
+
+static void i2c_direct_recover(void)
+{
+    I2C_CR1_REG = I2C_CR1_SWRST_BIT;
+    __asm__ volatile ("nop");
+    __asm__ volatile ("nop");
+    __asm__ volatile ("nop");
+    __asm__ volatile ("nop");
+    I2C_CR1_REG = 0U;
+
+    i2c_write_length = 0U;
+    i2c_write_overflow = 0U;
+    i2c_read_index = 0U;
+    i2c_direct_configure();
+}
+
 void i2c1_isr(void)
 {
     uint32_t status = I2C_SR1_REG;
 
     if ((status & I2C_ERROR_BITS) != 0U) {
         I2C_SR1_REG &= ~(status & I2C_ERROR_BITS);
-        i2c_write_length = 0U;
-        i2c_write_overflow = 0U;
+        i2c_direct_recover();
+        return;
     }
 
-    /* AF is the normal end of a slave transmit after the master NACKs. */
+    /* Clear the previous read NACK before handling a new address or TXE. */
     if ((status & I2C_SR1_AF_BIT) != 0U) {
         I2C_SR1_REG &= ~I2C_SR1_AF_BIT;
-        I2C_CR2_REG &= ~I2C_CR2_ITBUFEN_BIT;
-        status = I2C_SR1_REG;
+        i2c_read_length = 0U;
+        i2c_read_index = 0U;
+        return;
     }
 
     if ((status & I2C_SR1_ADDR_BIT) != 0U) {
         uint32_t direction = I2C_SR2_REG; /* SR1 then SR2 clears ADDR. */
 
-        I2C_CR2_REG |= I2C_CR2_ITBUFEN_BIT;
         if ((direction & I2C_SR2_TRA_BIT) != 0U) {
             i2c_read_index = 0U;
-            I2C_DR_REG = i2c_read_buffer[i2c_read_index++];
+            I2C_DR_REG = (i2c_read_length != 0U)
+                             ? i2c_read_buffer[i2c_read_index++]
+                             : 0xFFU;
         } else {
             i2c_write_length = 0U;
             i2c_write_overflow = 0U;
@@ -154,20 +207,19 @@ void i2c1_isr(void)
         } else {
             i2c_write_overflow = 1U;
         }
-        status = I2C_SR1_REG;
     }
 
     if ((status & I2C_SR1_STOPF_BIT) != 0U) {
         (void)I2C_SR1_REG;
         I2C_CR1_REG |= I2C_CR1_PE_BIT | I2C_CR1_ACK_BIT;
-        I2C_CR2_REG &= ~I2C_CR2_ITBUFEN_BIT;
         if (i2c_write_length != 0U && i2c_write_overflow == 0U) {
             i2c_write_ready = 1U;
         }
         return;
     }
 
-    if ((status & (I2C_SR1_TXE_BIT | I2C_SR1_BTF_BIT)) != 0U) {
+    /* TXE must always be serviced or the slave can remain in an IRQ loop. */
+    if ((status & I2C_SR1_TXE_BIT) != 0U) {
         I2C_DR_REG = (i2c_read_index < i2c_read_length)
                          ? i2c_read_buffer[i2c_read_index++]
                          : 0xFFU;
@@ -176,8 +228,6 @@ void i2c1_isr(void)
 
 static void i2c_slave_setup(void)
 {
-    uint32_t peripheral_clock_mhz = rcc_apb_frequency / 1000000U;
-
     rcc_periph_clock_enable(RCC_GPIOA);
     rcc_periph_clock_enable(RCC_GPIOB);
     rcc_periph_clock_enable(RCC_SYSCFG);
@@ -185,24 +235,19 @@ static void i2c_slave_setup(void)
 
     /* Configure only PB6=SCL and PA10=SDA. PA13/SWDIO and PA14/SWCLK
      * remain untouched so firmware can still be loaded through SWD. */
-    gpio_mode_setup(GPIOB, GPIO_MODE_AF, GPIO_PUPD_NONE, GPIO6);
+    gpio_mode_setup(GPIOB, GPIO_MODE_AF, GPIO_PUPD_PULLUP, GPIO6);
     gpio_set_output_options(GPIOB, GPIO_OTYPE_OD, GPIO_OSPEED_HIGH, GPIO6);
     gpio_set_af(GPIOB, GPIO_AF6, GPIO6);
 
-    gpio_mode_setup(GPIOA, GPIO_MODE_AF, GPIO_PUPD_NONE, GPIO10);
+    gpio_mode_setup(GPIOA, GPIO_MODE_AF, GPIO_PUPD_PULLUP, GPIO10);
     gpio_set_output_options(GPIOA, GPIO_OTYPE_OD, GPIO_OSPEED_HIGH, GPIO10);
     gpio_set_af(GPIOA, GPIO_AF6, GPIO10);
 
     SYSCFG_CFGR1_REG |= SYSCFG_I2C_PA10_ANF | SYSCFG_I2C_PB6_ANF;
 
-    I2C_CR1_REG = 0U;
-    I2C_CR2_REG = peripheral_clock_mhz;
-    I2C_OAR1_REG = I2C_SLAVE_ADDRESS << 1;
-    I2C_CCR_REG = rcc_apb_frequency / (2U * I2C_BUS_FREQUENCY_HZ);
-    I2C_TRISE_REG = peripheral_clock_mhz + 1U;
-    I2C_CR1_REG = I2C_CR1_PE_BIT | I2C_CR1_ACK_BIT;
-    I2C_CR2_REG |= I2C_CR2_ITEVTEN_BIT | I2C_CR2_ITERREN_BIT;
+    i2c_direct_recover();
 
+    nvic_set_priority(NVIC_I2C1_IRQ, 0U);
     nvic_enable_irq(NVIC_I2C1_IRQ);
 }
 
