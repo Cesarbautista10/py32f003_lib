@@ -1,7 +1,7 @@
 #include <Wire.h>
 
 constexpr uint8_t SLAVE_ADDRESS = 0x20;
-constexpr uint8_t REG_PWM_PERCENT = 0x01;
+constexpr uint8_t REG_PWM_PERCENT = 0x03;
 
 void beginI2C() {
 #if defined(ARDUINO_ARCH_ESP32)

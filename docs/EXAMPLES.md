@@ -241,6 +241,95 @@ ADC=2048/4095, voltage=1650 mV
 If the board supply is not 3.3 V, change `ADC_REFERENCE_MV` in
 `examples/adc.c` to the measured VDD value in millivolts.
 
+## Taller: red de nodos PY32 por I2C
+
+Estos ejemplos convierten cada PY32F003 en un esclavo I2C sencillo. Cada
+alumno carga uno de los siguientes firmware y asigna una direccion distinta:
+
+| Funcion | Firmware PY32 | Tipo |
+|---------|---------------|------|
+| ADC / TEMT6000 | `examples/i2c_adc.c` | `0x01` |
+| Salida digital | `examples/i2c_on_off.c` | `0x02` |
+| PWM | `examples/i2c_pwm.c` | `0x03` |
+
+En el firmware elegido se cambia solamente la direccion de 7 bits:
+
+```c
+#define I2C_SLAVE_ADDRESS 0x20U
+```
+
+Las direcciones validas van de `0x08` a `0x77` y no deben repetirse en la
+misma red. En `i2c_adc.c`, `DEVICE_MODEL` permite identificar el sensor:
+`0x01` corresponde al TEMT6000 y `0x00` a un sensor analogico generico. La
+lectura ADC siempre se entrega como valor crudo de 12 bits (`0..4095`).
+
+### Conexiones
+
+| Senal | PY32F003 |
+|-------|----------|
+| SCL | PB6 (AF6) |
+| SDA | PA10 (AF6) |
+| PWM / salida digital | PB5 |
+| Entrada ADC | PA2 / ADC_IN2 |
+
+El bus trabaja a 100 kHz. SDA y SCL requieren resistencias pull-up y todos los
+dispositivos deben compartir GND. Los ejemplos configuran solamente PB6/SCL y
+PA10/SDA: PA13/SWDIO y PA14/SWCLK permanecen disponibles para programacion.
+
+### Protocolo minimo
+
+Cada esclavo procesa los comandos con un `switch` en `process_i2c_write()`.
+El maestro escribe el comando, termina la transmision y solicita la respuesta.
+
+| Comando | Nodo | Operacion | Respuesta |
+|---------|------|-----------|-----------|
+| `0x00` | Todos | Identificacion | 2 bytes: tipo, modelo |
+| `0x01` | ADC | Leer PA2 | 2 bytes: ADC LSB, ADC MSB |
+| `0x02, 0` o `0x02, 1` | ON/OFF | Cambiar salida | 1 byte: estado actual |
+| `0x03, porcentaje` | PWM | Cambiar ciclo util `0..100` | 1 byte: porcentaje actual |
+
+### Compilar y programar
+
+```bash
+# Sustituye i2c_adc por i2c_on_off o i2c_pwm segun el nodo.
+cmake --fresh -S . -B build/i2c_adc \
+  -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-arm-none-eabi.cmake \
+  -DAPP=i2c_adc
+cmake --build build/i2c_adc --target flash-reset -j
+```
+
+### Maestro Arduino para la red
+
+El maestro esta en
+`examples/arduino_master/i2c_network/i2c_network.ino`. Usa solamente `Wire`,
+sin DevLabDDP ni bibliotecas externas. Abre el monitor serie a 115200 baudios
+con terminacion `Newline`.
+
+```text
+scan
+automap
+map
+clear map
+adc
+adc 1
+adc 0x20
+on 1
+on 2 0
+on 0x21 1
+pwm 50
+pwm 3 75
+pwm 0x22 25
+```
+
+`scan` muestra todas las direcciones presentes y `automap` consulta el comando
+`0x00` para clasificar los nodos. Los numeros decimales usados como dispositivo
+son indices de `map`; una direccion directa se escribe en hexadecimal. Sin
+indicar dispositivo, `adc` lee todos los nodos ADC, `on 1` controla el primer
+nodo ON/OFF y `pwm 50` controla el primer nodo PWM.
+
+Los maestros Arduino individuales permanecen en `examples/arduino_master/`
+para probar cada funcion por separado.
+
 ## Next Steps
 
 - [Flash examples to device](FLASH.md)

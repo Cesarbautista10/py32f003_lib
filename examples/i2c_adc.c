@@ -6,7 +6,11 @@
 
 /* Change this 7-bit address when another device already uses 0x20. */
 #define I2C_SLAVE_ADDRESS  0x20U
+#define REG_DEVICE_TYPE    0x00U
 #define REG_ADC_RAW        0x01U
+#define DEVICE_TYPE_ADC    0x01U
+/* 0x01 = TEMT6000. Use 0x00 for another generic analog sensor. */
+#define DEVICE_MODEL       0x01U
 
 #define ADC_INPUT_PORT     GPIOA
 #define ADC_INPUT_PIN      GPIO2
@@ -132,6 +136,12 @@ static void process_i2c_write(const uint8_t *data, uint8_t length)
     (void)length;
 
     switch (data[0]) {
+    case REG_DEVICE_TYPE:
+        /* Byte 0: node type. Byte 1: attached sensor model. */
+        i2c_set_response_u16_le(DEVICE_TYPE_ADC |
+                                (DEVICE_MODEL << 8));
+        break;
+
     case REG_ADC_RAW:
         /* Response order: low byte first, then high byte. */
         if ((adc_available != 0U) && (adc_read_stable(&value) != 0U)) {

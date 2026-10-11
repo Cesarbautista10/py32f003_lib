@@ -5,7 +5,10 @@
 
 /* Change this 7-bit address when another device already uses 0x20. */
 #define I2C_SLAVE_ADDRESS  0x20U
-#define REG_OUTPUT         0x01U
+#define REG_DEVICE_TYPE    0x00U
+#define REG_OUTPUT         0x02U
+#define DEVICE_TYPE_ON_OFF 0x02U
+#define DEVICE_MODEL       0x00U
 
 #define OUTPUT_PORT        GPIOB
 #define OUTPUT_PIN         GPIO5
@@ -36,6 +39,11 @@ static void output_write(uint8_t state)
 static void process_i2c_write(const uint8_t *data, uint8_t length)
 {
     switch (data[0]) {
+    case REG_DEVICE_TYPE:
+        i2c_set_response_u16_le(DEVICE_TYPE_ON_OFF |
+                                (DEVICE_MODEL << 8));
+        break;
+
     case REG_OUTPUT:
         if (length >= 2U) {
             output_write(data[1]);

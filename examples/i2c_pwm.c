@@ -6,7 +6,10 @@
 
 /* Change this 7-bit address when another device already uses 0x20. */
 #define I2C_SLAVE_ADDRESS  0x20U
-#define REG_PWM_PERCENT    0x01U
+#define REG_DEVICE_TYPE    0x00U
+#define REG_PWM_PERCENT    0x03U
+#define DEVICE_TYPE_PWM    0x03U
+#define DEVICE_MODEL       0x00U
 
 #define PWM_PORT           GPIOB
 #define PWM_PIN            GPIO5
@@ -67,6 +70,11 @@ static void pwm_set_percent(uint8_t percent)
 static void process_i2c_write(const uint8_t *data, uint8_t length)
 {
     switch (data[0]) {
+    case REG_DEVICE_TYPE:
+        i2c_set_response_u16_le(DEVICE_TYPE_PWM |
+                                (DEVICE_MODEL << 8));
+        break;
+
     case REG_PWM_PERCENT:
         if (length >= 2U) {
             pwm_set_percent(data[1]);
