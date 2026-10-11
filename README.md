@@ -6,7 +6,7 @@ This project supports building and flashing PY32F003 firmware with a CMake workf
 
 - **Full documentation**: See [docs/INDEX.md](docs/INDEX.md)
 - **Getting started**: [Setup](docs/SETUP.md) → [Build](docs/BUILD.md) → [Flash](docs/FLASH.md)
-- **Examples**: [Blink and UART](docs/EXAMPLES.md)
+- **Examples**: [Blink, UART, PWM, and ADC](docs/EXAMPLES.md)
 - **Hardware setup**: [Pinouts and connections](docs/HARDWARE.md)
 - **Stuck?**: [Troubleshooting](docs/TROUBLESHOOTING.md)
 
@@ -22,6 +22,8 @@ This project supports building and flashing PY32F003 firmware with a CMake workf
 - examples/
   - blink.c
   - uart.c
+  - pwm.c
+  - adc.c
 - libopencm3/
 - cmake/
   - toolchain-arm-none-eabi.cmake
@@ -48,7 +50,8 @@ cmake -DCMAKE_TOOLCHAIN_FILE=../cmake/toolchain-arm-none-eabi.cmake ..
 cmake --build . -j
 ```
 
-This creates `blink.elf`, `uart.elf`, and all `.bin`/`.hex` files in `build/`.
+This creates `blink.elf`, `uart.elf`, `pwm.elf`, `adc.elf`, and all matching
+`.bin`/`.hex` files in `build/`.
 
 ### Flash firmware
 
@@ -60,6 +63,10 @@ cmake --build . --target flash_reset_blink -j
 
 # Flash and reset uart
 cmake --build . --target flash_reset_uart -j
+
+# Flash and reset PWM or ADC
+cmake --build . --target flash_reset_pwm -j
+cmake --build . --target flash_reset_adc -j
 ```
 
 ## Example Selection
@@ -68,6 +75,8 @@ Use `APP` in CMake:
 
 - `-DAPP=blink`
 - `-DAPP=uart`
+- `-DAPP=pwm`
+- `-DAPP=adc`
 - `-DAPP=all` (build all examples)
 
 ## Recommended Build Flow (pico-sdk style)
@@ -117,7 +126,7 @@ cmake --build build/all -j
 
 ## Flash Targets
 
-### Single-app build (`APP=blink` or `APP=uart`)
+### Single-app build (`APP=blink`, `uart`, `pwm`, or `adc`)
 
 Global aliases are available:
 
@@ -136,8 +145,12 @@ Per-example targets are available:
 
 - `flash_blink`
 - `flash_uart`
+- `flash_pwm`
+- `flash_adc`
 - `flash_reset_blink`
 - `flash_reset_uart`
+- `flash_reset_pwm`
+- `flash_reset_adc`
 
 Example:
 

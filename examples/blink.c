@@ -33,7 +33,7 @@ static void delay_ms(uint32_t duration_ms)
 
 int main(void)
 {
-    rcc_clock_setup_in_hsi_out(RCC_ICSCR_HSI_FS_8MHZ);
+    rcc_clock_setup_in_hsi_out(RCC_ICSCR_HSI_FS_24MHZ);
     systick_setup();
     rcc_periph_clock_enable(RCC_GPIOB);
 

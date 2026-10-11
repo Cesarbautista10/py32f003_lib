@@ -1,42 +1,35 @@
 # Hardware - Pinouts and Connections
 
-## Device: PY32F003X4
+## Board: Unit Electronics DevLab PY32F003L24D6TR
 
 ### Specifications
 
-- **Microcontroller**: ARM Cortex-M0+ 
-- **Clock**: 8 MHz HSI (internal oscillator)
+- **Microcontroller**: PY32F003L24D6TR, ARM Cortex-M0+
+- **Maximum clock**: 24 MHz
 - **Flash**: 16 KB
 - **RAM**: 2 KB
-- **Pins**: 20 (LQFP20)
-- **Package**: LQFP20
+- **Board logic voltage**: 3.3 V
+- **Built-in LED**: PB5
 
 ### Pinout
 
-```
-          VDD
-           |
-    SWCLK--1  20--VSS
-    SWDIO--2  19--PA10
-     PA13--3  18--PA9
-     PA14--4  17--PA8
-      PA7--5  16--PA2
-      PA6--6  15--PA3
-      PA5--7  14--PA4
-      PA4--8  13--PA1 (RX)
-      PA3--9  12--PA0 (TX)
-      PA2-10  11--PB5 (LED)
-      PA1-11  10--GND
-      PA0-12   9--PB0
-      GND-13   8--PB1
-      PB5-14   7--PA15
-      GND-15   6--PA14
-      PB0-16   5--PA13
-      PB1-17   4--PA12
-     PA15-18   3--PA11
-     PA14-19   2--VSS
-     PA13-20   1--VDD
-```
+Use the labels printed on the DevLab board. The main exposed signals are:
+
+| Board label | Primary use in this project |
+|-------------|-----------------------------|
+| VCC / GND | Power and common ground |
+| PA0 | USART2 TX |
+| PA1 | USART2 RX |
+| PA2 | ADC_IN2 |
+| PB0 / PF2 | GPIO / reset |
+| PB5 | Built-in LED, TIM3_CH2 PWM |
+| PA13 | SWDIO |
+| PA14 | SWCLK |
+| PB6 / PA10 | Alternate I2C/GPIO signals |
+
+See the board manufacturer's
+[pinout PDF](https://unit-electronics-mx.github.io/unit_devlab_py32f003l24d6tr_development_board/hardware/unit_pinout_v_0_0_1_ue0102_py32f003_en.pdf)
+for the physical connector positions.
 
 ## Blink Example Connections
 
@@ -44,14 +37,14 @@
 
 | Function | Pin | Port |
 |----------|-----|------|
-| LED | 14 | PB5 |
-| GND | 15, 20, 13 | - |
-| VDD | 1 | - |
+| LED | PB5 | PB5 |
+| Ground | GND | - |
+| Power | VCC | - |
 
 ### Connection Diagram
 
 ```
-   PY32F003X4 (LQFP20)
+   Unit DevLab PY32F003
    
    ┌─────────────────┐
    │      LED        │
@@ -60,7 +53,7 @@
    │       │         │
    │      220Ω       │
    │       │         │
-   │      PB5 (14)   │
+   │       PB5       │
    │       │         │
    │      GND        │
    └─────────────────┘
@@ -72,20 +65,20 @@
 
 | Function | Pin | Port | Alt Func |
 |----------|-----|------|----------|
-| TX | 12 | PA0 | AF9 |
-| RX | 11 | PA1 | AF9 |
-| GND | 13, 15, 20 | - | - |
-| VDD | 1 | - | - |
+| TX | PA0 | PA0 | AF9 |
+| RX | PA1 | PA1 | AF9 |
+| Ground | GND | - | - |
+| Power | VCC | - | - |
 
 ### To USB-UART Adapter
 
 ```
-   PY32F003X4          USB-UART Adapter
+   Unit DevLab          USB-UART Adapter
    
    PA0 (TX) ----[R]---> RX
    PA1 (RX) ----[R]---> TX
    GND      ------------> GND
-   VDD      ------------> VCC (optional)
+   VCC      ------------> VCC (optional; use matching voltage)
    
    R = 1kΩ current limiting resistor (recommended)
 ```
@@ -127,16 +120,45 @@ socat /dev/ttyUSB0,b115200 STDOUT
 
 Exit: Ctrl+A, then X (minicom) or Ctrl+A, then Ctrl+D (screen)
 
+## PWM Example Connections
+
+| Function | Pin | Port | Alt Func |
+|----------|-----|------|----------|
+| TIM3 channel 2 | PB5 | PB5 | AF1 |
+
+The example drives the existing PB5 LED with a 1 kHz PWM signal. An
+oscilloscope or logic analyzer can also be connected directly to PB5 and GND.
+
+## ADC Example Connections
+
+| Function | Port | Notes |
+|----------|------|-------|
+| Analog input | PA2 | ADC_IN2, range 0 V to VDD |
+| UART output | PA0 | USART2 TX, AF9, 115200 baud |
+
+Recommended potentiometer connection:
+
+```text
+3.3 V ---- potentiometer ---- GND
+                 |
+                PA2
+
+PA0 ------------------------ USB-UART RX
+GND ------------------------ USB-UART GND
+```
+
+Do not apply a negative voltage or a voltage above VDD to PA2.
+
 ## Debug Probe Connection (Flashing)
 
 ### SWD Interface
 
 | Function | Pin | Port |
 |----------|-----|------|
-| SWDIO | 2 | - |
-| SWCLK | 1 | - |
-| GND | 13, 15, 20 | - |
-| VDD | Optional | - |
+| SWDIO | PA13 | - |
+| SWCLK | PA14 | - |
+| GND | GND | - |
+| VCC reference | VCC | - |
 
 ### Common Probes
 
@@ -155,7 +177,7 @@ pyocd list  # Verify probe detection
 ### Options
 
 1. **USB 5V** (via debug probe or adapter)
-   - Connect 5V to VDD
+   - Connect 5V to the board VCC input
    - GND to any GND pin
 
 2. **3.3V Regulator**

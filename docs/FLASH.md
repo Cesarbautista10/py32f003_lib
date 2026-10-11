@@ -29,12 +29,18 @@ cmake --build . --target flash_reset_blink -j
 # Flash and reset uart
 cmake --build . --target flash_reset_uart -j
 
+# Flash and reset PWM or ADC
+cmake --build . --target flash_reset_pwm -j
+cmake --build . --target flash_reset_adc -j
+
 # Flash without reset
 cmake --build . --target flash_blink -j
 cmake --build . --target flash_uart -j
+cmake --build . --target flash_pwm -j
+cmake --build . --target flash_adc -j
 ```
 
-### Single-app Build (APP=blink or APP=uart)
+### Single-app Build (APP=blink, uart, pwm, or adc)
 
 Global aliases available:
 

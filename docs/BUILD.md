@@ -28,8 +28,9 @@ cmake --build . -j
 This creates:
 - `build/blink.elf`
 - `build/uart.elf`
-- `build/blink.hex` / `build/uart.hex`
-- `build/blink.bin` / `build/uart.bin`
+- `build/pwm.elf`
+- `build/adc.elf`
+- Matching `.hex`, `.bin`, and `.map` files for each example
 
 ## Build Single Example
 
@@ -51,6 +52,16 @@ cmake -DCMAKE_TOOLCHAIN_FILE=../cmake/toolchain-arm-none-eabi.cmake -DAPP=uart .
 cmake --build . -j
 ```
 
+### PWM or ADC Only
+
+```bash
+cmake --fresh -S . -B build/pwm -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-arm-none-eabi.cmake -DAPP=pwm
+cmake --build build/pwm -j
+
+cmake --fresh -S . -B build/adc -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-arm-none-eabi.cmake -DAPP=adc
+cmake --build build/adc -j
+```
+
 ## Build Configuration
 
 ### APP Variable
@@ -59,6 +70,8 @@ Control which examples to build:
 
 - `-DAPP=blink` - Build blink example only
 - `-DAPP=uart` - Build uart example only
+- `-DAPP=pwm` - Build PWM example only
+- `-DAPP=adc` - Build ADC example only
 - `-DAPP=all` - Build all examples (default)
 
 ### CMake Invocation Examples
@@ -69,6 +82,10 @@ cmake -DCMAKE_TOOLCHAIN_FILE=../cmake/toolchain-arm-none-eabi.cmake -DAPP=blink 
 
 # UART only
 cmake -DCMAKE_TOOLCHAIN_FILE=../cmake/toolchain-arm-none-eabi.cmake -DAPP=uart ..
+
+# PWM or ADC only
+cmake -DCMAKE_TOOLCHAIN_FILE=../cmake/toolchain-arm-none-eabi.cmake -DAPP=pwm ..
+cmake -DCMAKE_TOOLCHAIN_FILE=../cmake/toolchain-arm-none-eabi.cmake -DAPP=adc ..
 
 # All examples
 cmake -DCMAKE_TOOLCHAIN_FILE=../cmake/toolchain-arm-none-eabi.cmake -DAPP=all ..
@@ -91,6 +108,8 @@ build/
 ├── uart.hex               # Hex format for flashing
 ├── uart.bin               # Binary format
 ├── uart.map               # Linker map file
+├── pwm.elf / pwm.hex / pwm.bin / pwm.map
+├── adc.elf / adc.hex / adc.bin / adc.map
 ├── generated.py32f003x4.ld  # Generated linker script
 └── pyocd.yaml             # Auto-generated pyOCD config
 ```

@@ -21,7 +21,7 @@ Welcome to the PY32F003 + libopencm3 SDK documentation. Choose a topic:
 
 ```
 .
-├── examples/           # Source code for blink and uart examples
+├── examples/           # Source code for blink, uart, pwm, and adc examples
 ├── libopencm3/        # ARM Cortex-M0+ library (git submodule)
 ├── cmake/             # CMake toolchain for ARM cross-compilation
 ├── pyocd-packs/       # pyOCD device packs

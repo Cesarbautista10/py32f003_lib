@@ -19,7 +19,7 @@ cmake --build . -j
 ### CMake: "Unknown APP"
 
 ```
-FATAL_ERROR Unknown APP='xyz'. Valid values: blink, uart, all
+FATAL_ERROR Unknown APP='xyz'. Valid values: blink, uart, pwm, adc, all
 ```
 
 **Solution**: Use valid APP names
@@ -28,6 +28,8 @@ FATAL_ERROR Unknown APP='xyz'. Valid values: blink, uart, all
 # Valid values:
 cmake -DAPP=blink ..
 cmake -DAPP=uart ..
+cmake -DAPP=pwm ..
+cmake -DAPP=adc ..
 cmake -DAPP=all ..
 ```
 

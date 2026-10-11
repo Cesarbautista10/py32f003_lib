@@ -2,10 +2,12 @@
 
 ## Overview
 
-Two example programs are included:
+Four example programs are included:
 
 1. **Blink** - Simple LED blinking
 2. **UART** - Character echo with startup stabilization
+3. **PWM** - LED brightness control with TIM3
+4. **ADC** - Analog voltage measurement reported over UART
 
 ## Blink Example
 
@@ -20,7 +22,7 @@ Demonstrates basic GPIO control and timing on the PY32F003.
 ### Hardware
 
 - **LED**: PB5 (active high)
-- **Clock**: HSI 8MHz
+- **Clock**: HSI 24 MHz
 
 ### Behavior
 
@@ -173,6 +175,71 @@ static uint8_t uart_recv_blocking(void) {
 - Verify common GND between device and adapter
 
 **Only partial characters**: Usually caused by baud rate mismatch or noise on lines
+
+## PWM Example
+
+### Purpose
+
+Generates a 1 kHz PWM signal with TIM3 channel 2 and varies its duty cycle to
+create a breathing LED effect.
+
+### Hardware
+
+- **PWM output**: PB5 (TIM3_CH2, AF1)
+- **Timer clock**: 8 MHz
+- **PWM frequency**: 1 kHz
+- **Duty cycle**: ramps between 0% and 100%
+
+### Build and Flash
+
+```bash
+cmake --fresh -S . -B build/pwm \
+  -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-arm-none-eabi.cmake \
+  -DAPP=pwm
+cmake --build build/pwm -j
+cmake --build build/pwm --target flash-reset -j
+```
+
+Observe the LED on PB5 gradually increasing and decreasing in brightness. A
+logic analyzer or oscilloscope on PB5 will show a 1 kHz waveform.
+
+## ADC Example
+
+### Purpose
+
+Samples a voltage on ADC channel 2 and reports both the raw 12-bit value and
+the calculated voltage over USART2.
+
+### Hardware
+
+- **Analog input**: PA2 (ADC_IN2, exposed on the DevLab header)
+- **Allowed input range**: 0 V to VDD; never apply a negative voltage or more
+  than VDD
+- **UART TX**: PA0 (AF9), 115200 8N1
+- **Reference used by the example**: 3300 mV
+
+Connect a 10 kΩ potentiometer between 3.3 V and GND, with its wiper connected
+to PA2. Connect PA0 to the RX input of a USB-UART adapter and join both grounds.
+
+### Build and Flash
+
+```bash
+cmake --fresh -S . -B build/adc \
+  -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-arm-none-eabi.cmake \
+  -DAPP=adc
+cmake --build build/adc -j
+cmake --build build/adc --target flash-reset -j
+```
+
+Open a 115200-baud terminal. The output is updated every 250 ms:
+
+```text
+PY32F003 ADC: PA2 / ADC_IN2
+ADC=2048/4095, voltage=1650 mV
+```
+
+If the board supply is not 3.3 V, change `ADC_REFERENCE_MV` in
+`examples/adc.c` to the measured VDD value in millivolts.
 
 ## Next Steps
 
