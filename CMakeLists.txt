@@ -2,10 +2,10 @@ cmake_minimum_required(VERSION 3.16)
 project(py32_sdk C ASM)
 
 set(DEVICE py32f003x4)
-set(APP all CACHE STRING "Example to build: blink, uart, pwm, pwm_pa0, adc, i2c_pwm, i2c_on_off, i2c_adc, or all")
+set(APP all CACHE STRING "Example to build: blink, uart, pwm, pwm_pa2, adc, i2c_pwm, i2c_on_off, i2c_adc, or all")
 set(OPENCM3_DIR ${CMAKE_SOURCE_DIR}/libopencm3)
 set(GENERATED_LD ${CMAKE_BINARY_DIR}/generated.${DEVICE}.ld)
-set(VALID_APPS blink uart pwm pwm_pa0 adc i2c_pwm i2c_on_off i2c_adc)
+set(VALID_APPS blink uart pwm pwm_pa2 adc i2c_pwm i2c_on_off i2c_adc)
 
 set(MCU_FLAGS -mcpu=cortex-m0plus -mthumb -msoft-float)
 set(DEFS -DPY32F0 -DPY32F003X4)

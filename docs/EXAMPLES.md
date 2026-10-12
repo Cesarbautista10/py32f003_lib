@@ -203,6 +203,21 @@ cmake --build build/pwm --target flash-reset -j
 Observe the LED on PB5 gradually increasing and decreasing in brightness. A
 logic analyzer or oscilloscope on PB5 will show a 1 kHz waveform.
 
+### PWM on PA2
+
+The `pwm_pa2` example produces the same 1 kHz duty-cycle ramp on PA2 using
+TIM3 channel 1 (AF13). Connect an oscilloscope or logic analyzer between PA2
+and GND. PA2 is shared with ADC_IN2, so it cannot be used as an ADC input while
+this example is running.
+
+```bash
+cmake --fresh -S . -B build/pwm_pa2 \
+  -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-arm-none-eabi.cmake \
+  -DAPP=pwm_pa2
+cmake --build build/pwm_pa2 -j
+cmake --build build/pwm_pa2 --target flash-reset -j
+```
+
 ## ADC Example
 
 ### Purpose

@@ -125,9 +125,13 @@ Exit: Ctrl+A, then X (minicom) or Ctrl+A, then Ctrl+D (screen)
 | Function | Pin | Port | Alt Func |
 |----------|-----|------|----------|
 | TIM3 channel 2 | PB5 | PB5 | AF1 |
+| TIM3 channel 1 | PA2 | PA2 | AF13 |
 
 The example drives the existing PB5 LED with a 1 kHz PWM signal. An
 oscilloscope or logic analyzer can also be connected directly to PB5 and GND.
+
+For the `pwm_pa2` example, connect the instrument to PA2 and GND instead. PA2
+outputs TIM3 channel 1 PWM on AF13 and cannot simultaneously serve as ADC_IN2.
 
 ## ADC Example Connections
 
