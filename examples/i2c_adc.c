@@ -9,8 +9,8 @@
 #define REG_DEVICE_TYPE    0x00U
 #define REG_ADC_RAW        0x01U
 #define DEVICE_TYPE_ADC    0x01U
-/* 0x01 = TEMT6000. Use 0x00 for another generic analog sensor. */
-#define DEVICE_MODEL       0x01U
+/* Generic ADC demo: no particular analog sensor is assumed. */
+#define DEVICE_MODEL       0x00U
 
 #define ADC_INPUT_PORT     GPIOA
 #define ADC_INPUT_PIN      GPIO2
@@ -108,7 +108,7 @@ static uint8_t adc_convert_single(uint16_t *value)
     }
 
     *value = (uint16_t)(ADC_DR & ADC_MAX_VALUE);
-    /* TEMT6000 reference calls HAL_ADC_Stop() after every conversion. */
+    /* Stop after each conversion so the next read starts from a known state. */
     adc_stop();
     return 1U;
 }

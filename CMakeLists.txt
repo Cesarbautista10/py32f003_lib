@@ -2,10 +2,14 @@ cmake_minimum_required(VERSION 3.16)
 project(py32_sdk C ASM)
 
 set(DEVICE py32f003x4)
-set(APP all CACHE STRING "Example to build: blink, uart, pwm, pwm_pa2, adc, i2c_pwm, i2c_on_off, i2c_adc, or all")
+set(APP all CACHE STRING "Example to build: blink, uart, pwm, pwm_pa2, adc, i2c_pwm, i2c_on_off, i2c_adc, rgb_pa0, ws2812_pa0, or all")
 set(OPENCM3_DIR ${CMAKE_SOURCE_DIR}/libopencm3)
 set(GENERATED_LD ${CMAKE_BINARY_DIR}/generated.${DEVICE}.ld)
-set(VALID_APPS blink uart pwm pwm_pa2 adc i2c_pwm i2c_on_off i2c_adc)
+set(VALID_APPS blink uart pwm pwm_pa2 adc i2c_pwm i2c_on_off i2c_adc rgb_pa0 ws2812_pa0)
+set(RGB_PA0_I2C_ADDRESS 0x20 CACHE STRING "7-bit I2C address for rgb_pa0")
+set(RGB_PA0_PIXEL_COUNT 80 CACHE STRING "Number of WS2812-compatible LEDs driven by rgb_pa0")
+option(RGB_PA0_I2C_USE_PF0_PF1 "Use PF0/PF1 instead of PA10/PB6 for rgb_pa0 I2C" OFF)
+set(WS2812_PA0_LED_COUNT 80 CACHE STRING "Number of LEDs in the standalone PA0 demo")
 
 set(MCU_FLAGS -mcpu=cortex-m0plus -mthumb -msoft-float)
 set(DEFS -DPY32F0 -DPY32F003X4)
@@ -56,6 +60,18 @@ function(add_py32_example EXAMPLE_NAME)
 
     add_executable(${EXAMPLE_NAME}.elf ${EXAMPLE_SOURCE})
     add_dependencies(${EXAMPLE_NAME}.elf generate_linker)
+
+    if(EXAMPLE_NAME STREQUAL "rgb_pa0")
+        target_sources(${EXAMPLE_NAME}.elf PRIVATE ${CMAKE_SOURCE_DIR}/examples/ws2812_tim1.c)
+        target_compile_definitions(${EXAMPLE_NAME}.elf PRIVATE
+            RGB_PA0_I2C_ADDRESS=${RGB_PA0_I2C_ADDRESS}
+            RGB_PA0_I2C_USE_PF0_PF1=$<BOOL:${RGB_PA0_I2C_USE_PF0_PF1}>
+            WS2812_LED_COUNT=${RGB_PA0_PIXEL_COUNT})
+    elseif(EXAMPLE_NAME STREQUAL "ws2812_pa0")
+        target_sources(${EXAMPLE_NAME}.elf PRIVATE ${CMAKE_SOURCE_DIR}/examples/ws2812_tim1.c)
+        target_compile_definitions(${EXAMPLE_NAME}.elf PRIVATE
+            WS2812_LED_COUNT=${WS2812_PA0_LED_COUNT})
+    endif()
 
     target_link_libraries(${EXAMPLE_NAME}.elf ${OPENCM3_DIR}/lib/libopencm3_py32f0.a)
     target_link_options(${EXAMPLE_NAME}.elf PRIVATE

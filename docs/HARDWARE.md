@@ -31,6 +31,31 @@ See the board manufacturer's
 [pinout PDF](https://unit-electronics-mx.github.io/unit_devlab_py32f003l24d6tr_development_board/hardware/unit_pinout_v_0_0_1_ue0102_py32f003_en.pdf)
 for the physical connector positions.
 
+## WS2812-compatible RGB LED connections on PA0
+
+The standalone `ws2812_pa0` demo uses only PA0 for its data output. Connect
+PA0 to the first pixel's DIN and join the grounds. The `rgb_pa0` I2C example
+uses the same LED data output plus PA10 and PB6 for I2C on the DevLab board.
+
+| Signal | MCU pin | Alternate function |
+|--------|---------|--------------------|
+| I2C SDA | PA10 | AF6 |
+| I2C SCL | PB6 | AF6 |
+| RGB LED DIN | PA0 | TIM1_CH3, AF13 |
+
+Connect PA10 and PB6 to the I2C master with pull-ups to 3.3 V. Connect PA0 to
+the first pixel's DIN and join grounds. Power the strip from a supply sized for
+its LED count; do not power an 80-pixel strip through the MCU board. If the
+strip uses 5 V, use a 3.3 V to 5 V data-level shifter when required by the
+LED's input threshold.
+
+On the DevLab's DFN8 package, PA10 and PB6 share physical pads with PA13/SWDIO
+and PA14/SWCLK. The firmware configures PA10/PB6 for I2C and leaves PA13/PA14
+untouched so SWD remains available for programming. Disconnect the I2C master
+from those pads while flashing if it interferes with the SWD signals. To use
+PF0/PF1 instead on a package that exposes them, build with
+`-DRGB_PA0_I2C_USE_PF0_PF1=ON` and connect SDA to PF0, SCL to PF1.
+
 ## Blink Example Connections
 
 ### Minimal Setup

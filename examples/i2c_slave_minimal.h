@@ -10,13 +10,16 @@
 #include <libopencm3/cm3/cortex.h>
 #include <libopencm3/cm3/nvic.h>
 
-/* Define I2C_SLAVE_ADDRESS before including this file to change it. */
+/* Define I2C_SLAVE_ADDRESS to change the address.
+ * I2C_SLAVE_PF0_PF1 selects PF0/PF1; otherwise PA10/PB6 are used. */
 #ifndef I2C_SLAVE_ADDRESS
 #define I2C_SLAVE_ADDRESS       0x20U
 #endif
 
 #define I2C_BUS_FREQUENCY_HZ    100000U
+#ifndef I2C_WRITE_BUFFER_SIZE
 #define I2C_WRITE_BUFFER_SIZE   4U
+#endif
 #define I2C_READ_BUFFER_SIZE    2U
 
 #if I2C_SLAVE_ADDRESS < 0x08U || I2C_SLAVE_ADDRESS > 0x77U
@@ -228,13 +231,22 @@ void i2c1_isr(void)
 
 static void i2c_slave_setup(void)
 {
+#ifdef I2C_SLAVE_PF0_PF1
+    rcc_periph_clock_enable(RCC_GPIOF);
+    rcc_periph_clock_enable(RCC_I2C1);
+
+    /* LockNode wiring: PF1=SCL, PF0=SDA, both on AF12. */
+    gpio_mode_setup(GPIOF, GPIO_MODE_AF, GPIO_PUPD_PULLUP, GPIO0 | GPIO1);
+    gpio_set_output_options(GPIOF, GPIO_OTYPE_OD, GPIO_OSPEED_HIGH, GPIO0 | GPIO1);
+    gpio_set_af(GPIOF, GPIO_AF12, GPIO0 | GPIO1);
+#else
     rcc_periph_clock_enable(RCC_GPIOA);
     rcc_periph_clock_enable(RCC_GPIOB);
     rcc_periph_clock_enable(RCC_SYSCFG);
     rcc_periph_clock_enable(RCC_I2C1);
 
-    /* Configure only PB6=SCL and PA10=SDA. PA13/SWDIO and PA14/SWCLK
-     * remain untouched so firmware can still be loaded through SWD. */
+    /* Configure only PB6=SCL and PA10=SDA. Leave PA13/SWDIO and PA14/SWCLK
+     * untouched so the programmed firmware does not disable SWD. */
     gpio_mode_setup(GPIOB, GPIO_MODE_AF, GPIO_PUPD_PULLUP, GPIO6);
     gpio_set_output_options(GPIOB, GPIO_OTYPE_OD, GPIO_OSPEED_HIGH, GPIO6);
     gpio_set_af(GPIOB, GPIO_AF6, GPIO6);
@@ -244,6 +256,7 @@ static void i2c_slave_setup(void)
     gpio_set_af(GPIOA, GPIO_AF6, GPIO10);
 
     SYSCFG_CFGR1_REG |= SYSCFG_I2C_PA10_ANF | SYSCFG_I2C_PB6_ANF;
+#endif
 
     i2c_direct_recover();
 

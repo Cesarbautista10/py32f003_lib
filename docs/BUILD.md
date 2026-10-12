@@ -71,6 +71,8 @@ Control which examples to build:
 - `-DAPP=blink` - Build blink example only
 - `-DAPP=uart` - Build uart example only
 - `-DAPP=pwm` - Build PWM example only
+- `-DAPP=rgb_pa0` - Build the PA0 RGB LED I2C example only
+- `-DAPP=ws2812_pa0` - Build the standalone PA0 WS2812 demo only
 - `-DAPP=adc` - Build ADC example only
 - `-DAPP=all` - Build all examples (default)
 

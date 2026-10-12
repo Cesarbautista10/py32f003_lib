@@ -29,9 +29,10 @@ cmake --build . --target flash_reset_blink -j
 # Flash and reset uart
 cmake --build . --target flash_reset_uart -j
 
-# Flash and reset PWM or ADC
+# Flash and reset PWM, ADC, or the standalone WS2812 demo
 cmake --build . --target flash_reset_pwm -j
 cmake --build . --target flash_reset_adc -j
+cmake --build . --target flash_reset_ws2812_pa0 -j
 
 # Flash without reset
 cmake --build . --target flash_blink -j

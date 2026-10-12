@@ -77,7 +77,13 @@ Use `APP` in CMake:
 - `-DAPP=uart`
 - `-DAPP=pwm`
 - `-DAPP=adc`
+- `-DAPP=rgb_pa0` (WS2812-compatible RGB LEDs over I2C, data output on PA0)
+- `-DAPP=ws2812_pa0` (standalone WS2812-compatible RGB LED animation on PA0)
 - `-DAPP=all` (build all examples)
+
+The standalone Arduino master for `rgb_pa0` is in
+`examples/arduino_master/i2c_rgb/`. The workshop network master in
+`examples/arduino_master/i2c_network/` also discovers and controls NeoPixel PA0 nodes.
 
 ## Recommended Build Flow (pico-sdk style)
 
