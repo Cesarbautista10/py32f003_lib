@@ -392,7 +392,7 @@ bool parseByte(const char *text, uint8_t minimum, uint8_t maximum,
 void addManualNeopixel(const char *addressText) {
   uint8_t address;
   if (!parseByte(addressText, FIRST_I2C_ADDRESS, LAST_I2C_ADDRESS, address)) {
-    Serial.println(F("Invalid I2C address. Use: map add 0x20 neopixel"));
+    Serial.println(F("Invalid I2C address. Use: map add 0x40 neopixel"));
     return;
   }
   Node node = {address, TYPE_NEOPIXEL, MODEL_NONE};
@@ -684,7 +684,7 @@ void processLine(char *line) {
     if (parseByte(first, FIRST_I2C_ADDRESS, LAST_I2C_ADDRESS, address)) {
       probeAddress(address);
     } else {
-      Serial.println(F("Invalid I2C address. Use: probe 0x20"));
+      Serial.println(F("Invalid I2C address. Use: probe 0x40"));
     }
   } else if (strcmp(command, "automap") == 0 && wordCount == 1) {
     autoMap();

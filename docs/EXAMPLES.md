@@ -272,7 +272,7 @@ En todos los esclavos, incluido `rgb_pa0`, se cambia la direccion de 7 bits
 en el archivo C:
 
 ```c
-#define I2C_SLAVE_ADDRESS 0x20U
+#define I2C_SLAVE_ADDRESS 0x40U  /* rgb_pa0.c */
 ```
 
 En `rgb_pa0.c`, `I2C_SLAVE_ADDRESS` aparece al inicio del archivo, igual que
@@ -281,7 +281,7 @@ en ADC, PWM y ON/OFF. Si un directorio de compilacion antiguo conserva un
 para no cambiar su direccion por accidente.
 
 Las direcciones validas van de `0x08` a `0x77` y no deben repetirse en la
-misma red. Por ejemplo, usa ADC `0x20`, ON/OFF `0x21`, PWM `0x22` y RGB `0x23`.
+misma red. Por ejemplo, usa ADC `0x20`, ON/OFF `0x21`, PWM `0x22` y NeoPixel `0x40`.
 Si dos nodos conservan la direccion predeterminada `0x20`, `scan` no puede
 distinguirlos y `automap` puede recibir respuestas mezcladas. En `i2c_adc.c`,
 `DEVICE_MODEL` del ejemplo ADC vale `0x00`: es una demostracion de entrada
@@ -347,7 +347,7 @@ arduino-cli upload --fqbn esp32:esp32:esp32 -p /dev/ttyUSB0 \
 
 ```text
 scan
-probe 0x20
+probe 0x40
 automap
 map
 clear map
@@ -364,7 +364,7 @@ red
 rgb 32 0 16
 pixel 0 255 0 0
 show
-rgb 0x23 16 32 64
+rgb 0x40 16 32 64
 ```
 
 `scan` muestra todas las direcciones presentes y `automap` consulta el comando
@@ -373,15 +373,15 @@ menos dos pasadas y hasta cuatro si al inicio no aparecen nodos o hay errores
 de bus. Cuando una pasada no encuentra nodos, el maestro reinicia I2C y espera
 500 ms antes de reintentar; si se repiten los errores, corta la pasada e
 informa el problema.
-`probe 0x20` comprueba una sola direccion e indica ACK, NACK o el estado de
+`probe 0x40` comprueba una sola direccion e indica ACK, NACK o el estado de
 error de `Wire`, util para revisar el nodo RGB sin barrer toda la red.
-Si `automap` muestra `Unknown identity at 0x20`, los dos bytes impresos son la
+Si `automap` muestra `Unknown identity at 0x40`, los dos bytes impresos son la
 respuesta al comando `0x00`. El firmware NeoPixel PA0 actual responde
 `0x04 0x01`: tipo `0x04`, modelo PA0 `0x01`. El maestro tambien reconoce el
 firmware anterior con respuesta `0x04 0x00` y lo muestra como
 `NEOPIXEL PA0 (legacy)`. Si el firmware instalado aun no implementa `0x00`,
-`map add 0x20 neopixel` registra ese nodo manualmente sin enviar comandos al
-esclavo; cambia `0x20` por su direccion real.
+`map add 0x40 neopixel` registra ese nodo manualmente sin enviar comandos al
+esclavo; cambia `0x40` por su direccion real.
 Los numeros decimales usados como dispositivo
 son indices de `map`; una direccion directa se escribe en hexadecimal. Sin
 indicar dispositivo, `adc` lee todos los nodos ADC, `on 1` controla el primer
@@ -422,7 +422,7 @@ PA0 through TIM1_CH3 with DMA at 800 kHz. The default colors use intensity
 the MCU's 2 KB RAM.
 
 Default DevLab wiring: PB6 is I2C SCL, PA10 is I2C SDA (both AF6), and PA0 is
-the RGB LED data output (TIM1_CH3, AF13). The slave address is `0x20` by
+the RGB LED data output (TIM1_CH3, AF13). The slave address is `0x40` by
 default. Use external I2C pull-ups to 3.3 V and share ground with the master.
 On the DFN8 package, PA10/PB6 share pads with SWD. The firmware leaves
 PA13/SWDIO and PA14/SWCLK untouched for programming. For a package with
@@ -444,7 +444,7 @@ PF0/PF1 available, build with
 ### Arduino RGB controller
 
 Flash `examples/arduino_master/i2c_rgb/i2c_rgb.ino` to an Arduino-compatible
-I2C master. It sends the commands above to `rgb_pa0` at address `0x20` and
+I2C master. It sends the commands above to `rgb_pa0` at address `0x40` and
 checks the one-byte response. On ESP32 it uses GPIO6 for SDA and GPIO7 for SCL,
 matching the ADC and ON/OFF masters. Other boards use their `Wire` defaults;
 edit `beginI2C()` for a different pin pair.

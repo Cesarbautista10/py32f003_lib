@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-constexpr uint8_t SLAVE_ADDRESS = 0x20;
+constexpr uint8_t SLAVE_ADDRESS = 0x40;
 constexpr uint8_t CMD_RED = 0x02;
 constexpr uint8_t CMD_GREEN = 0x03;
 constexpr uint8_t CMD_BLUE = 0x04;
