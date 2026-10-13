@@ -268,14 +268,17 @@ alumno carga uno de los siguientes firmware y asigna una direccion distinta:
 | PWM | `examples/i2c_pwm.c` | `0x03` |
 | NeoPixel WS2812 en PA0 | `examples/rgb_pa0.c` | `0x04` |
 
-En los ejemplos ADC, ON/OFF y PWM se cambia la direccion de 7 bits en el
-archivo C:
+En todos los esclavos, incluido `rgb_pa0`, se cambia la direccion de 7 bits
+en el archivo C:
 
 ```c
 #define I2C_SLAVE_ADDRESS 0x20U
 ```
 
-Para el nodo RGB se usa `-DRGB_PA0_I2C_ADDRESS=0x20` al configurar CMake.
+En `rgb_pa0.c`, `I2C_SLAVE_ADDRESS` aparece al inicio del archivo, igual que
+en ADC, PWM y ON/OFF. Si un directorio de compilacion antiguo conserva un
+`RGB_PA0_I2C_ADDRESS` distinto de `0x20`, ese valor sigue teniendo prioridad
+para no cambiar su direccion por accidente.
 
 Las direcciones validas van de `0x08` a `0x77` y no deben repetirse en la
 misma red. Por ejemplo, usa ADC `0x20`, ON/OFF `0x21`, PWM `0x22` y RGB `0x23`.
@@ -475,7 +478,7 @@ demo
 
 `rgb` updates every LED immediately. `pixel` edits the buffer; `show` sends
 the edited buffer to the strip. Set `SLAVE_ADDRESS` in the sketch to the same
-value as `RGB_PA0_I2C_ADDRESS` in the PY32 firmware.
+value as `I2C_SLAVE_ADDRESS` in `rgb_pa0.c`.
 
 Invalid commands, lengths, or pixel indices return `FF`. Each write must end
 with STOP; wait at least 4 ms for the default 80 pixels, then request one byte
@@ -491,14 +494,13 @@ outside this example.
 cmake --fresh -S . -B build/rgb_pa0 \
   -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-arm-none-eabi.cmake \
   -DAPP=rgb_pa0 \
-  -DRGB_PA0_I2C_ADDRESS=0x20 \
   -DRGB_PA0_PIXEL_COUNT=80 \
   -DRGB_PA0_I2C_USE_PF0_PF1=OFF
 cmake --build build/rgb_pa0 -j
 cmake --build build/rgb_pa0 --target flash-reset -j
 ```
 
-Set a different `RGB_PA0_I2C_ADDRESS` for each node on the same bus. The
+Set a different `I2C_SLAVE_ADDRESS` in each slave source on the same bus. The
 firmware starts with all pixels off. Its five color commands use LockNode's
 original byte values, so existing masters can send them unchanged. The new
 `50`-`52` commands leave LockNode's `40`-`46` device-info and color-slot range

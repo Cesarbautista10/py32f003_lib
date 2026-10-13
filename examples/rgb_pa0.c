@@ -5,14 +5,14 @@
 
 #include "ws2812_tim1.h"
 
-#ifndef RGB_PA0_I2C_ADDRESS
-#define RGB_PA0_I2C_ADDRESS 0x20U
+/* Change this 7-bit address when another device already uses 0x20. */
+#ifndef I2C_SLAVE_ADDRESS
+#define I2C_SLAVE_ADDRESS  0x20U
 #endif
 #ifndef RGB_PA0_I2C_USE_PF0_PF1
 #define RGB_PA0_I2C_USE_PF0_PF1 0
 #endif
 
-#define I2C_SLAVE_ADDRESS       RGB_PA0_I2C_ADDRESS
 #define I2C_WRITE_BUFFER_SIZE   5U
 #if RGB_PA0_I2C_USE_PF0_PF1
 #define I2C_SLAVE_PF0_PF1

@@ -6,7 +6,6 @@ set(APP all CACHE STRING "Example to build: blink, uart, pwm, pwm_pa2, adc, i2c_
 set(OPENCM3_DIR ${CMAKE_SOURCE_DIR}/libopencm3)
 set(GENERATED_LD ${CMAKE_BINARY_DIR}/generated.${DEVICE}.ld)
 set(VALID_APPS blink uart pwm pwm_pa2 adc i2c_pwm i2c_on_off i2c_adc rgb_pa0 ws2812_pa0)
-set(RGB_PA0_I2C_ADDRESS 0x20 CACHE STRING "7-bit I2C address for rgb_pa0")
 set(RGB_PA0_PIXEL_COUNT 80 CACHE STRING "Number of WS2812-compatible LEDs driven by rgb_pa0")
 option(RGB_PA0_I2C_USE_PF0_PF1 "Use PF0/PF1 instead of PA10/PB6 for rgb_pa0 I2C" OFF)
 set(WS2812_PA0_LED_COUNT 80 CACHE STRING "Number of LEDs in the standalone PA0 demo")
@@ -64,9 +63,17 @@ function(add_py32_example EXAMPLE_NAME)
     if(EXAMPLE_NAME STREQUAL "rgb_pa0")
         target_sources(${EXAMPLE_NAME}.elf PRIVATE ${CMAKE_SOURCE_DIR}/examples/ws2812_tim1.c)
         target_compile_definitions(${EXAMPLE_NAME}.elf PRIVATE
-            RGB_PA0_I2C_ADDRESS=${RGB_PA0_I2C_ADDRESS}
             RGB_PA0_I2C_USE_PF0_PF1=$<BOOL:${RGB_PA0_I2C_USE_PF0_PF1}>
             WS2812_LED_COUNT=${RGB_PA0_PIXEL_COUNT})
+        # Preserve non-default addresses in existing build directories.
+        # New builds take the default address from rgb_pa0.c like other slaves.
+        if(DEFINED RGB_PA0_I2C_ADDRESS AND
+           NOT RGB_PA0_I2C_ADDRESS STREQUAL "0x20" AND
+           NOT RGB_PA0_I2C_ADDRESS STREQUAL "")
+            message(STATUS "rgb_pa0: legacy RGB_PA0_I2C_ADDRESS=${RGB_PA0_I2C_ADDRESS} overrides I2C_SLAVE_ADDRESS in rgb_pa0.c")
+            target_compile_definitions(${EXAMPLE_NAME}.elf PRIVATE
+                I2C_SLAVE_ADDRESS=${RGB_PA0_I2C_ADDRESS})
+        endif()
     elseif(EXAMPLE_NAME STREQUAL "ws2812_pa0")
         target_sources(${EXAMPLE_NAME}.elf PRIVATE ${CMAKE_SOURCE_DIR}/examples/ws2812_tim1.c)
         target_compile_definitions(${EXAMPLE_NAME}.elf PRIVATE
