@@ -1,210 +1,129 @@
 # PY32F003 + libopencm3
 
-This project supports building and flashing PY32F003 firmware with a CMake workflow similar to pico-sdk.
+Build and flash firmware for the PY32F003 with an ARM toolchain, CMake, and pyOCD. Select one example or build the full collection; each build produces `.elf`, `.bin`, and `.hex` files.
 
-## Quick Links
+> [!TIP]
+> Following the BugCON workshop? Start with the [workshop's four-step guide](https://github.com/UNIT-Electronics-MX/unit_py32_libopencm3): installation → compilation → PyOCD and probe → flashing. The instructions below also work when using this SDK on its own; run them from the `py32f003_lib/` directory.
 
-- **Full documentation**: See [docs/INDEX.md](docs/INDEX.md)
-- **Getting started**: [Setup](docs/SETUP.md) → [Build](docs/BUILD.md) → [Flash](docs/FLASH.md)
-- **Examples**: [Blink, UART, PWM, and ADC](docs/EXAMPLES.md)
-- **Hardware setup**: [Pinouts and connections](docs/HARDWARE.md)
-- **Stuck?**: [Troubleshooting](docs/TROUBLESHOOTING.md)
+| [Set up](docs/SETUP.md) | [Build](docs/BUILD.md) | [Flash](docs/FLASH.md) | [Hardware](docs/HARDWARE.md) |
+| :---: | :---: | :---: | :---: |
+| Toolchain and pyOCD | Build options and outputs | Program the board | Pins and wiring |
+
+See the [documentation index](docs/INDEX.md) for the [examples](docs/EXAMPLES.md) and [troubleshooting guide](docs/TROUBLESHOOTING.md).
 
 ## Requirements
 
-- arm-none-eabi-gcc
-- cmake 3.16+
-- make or gmake
-- pyocd
+- `arm-none-eabi-gcc` and related ARM tools
+- CMake 3.16 or newer
+- `make` or `gmake`
+- Python 3 and `pyocd` for flashing
+- A compatible SWD probe and a PY32F003 board for hardware steps
 
-## Project Layout
+## 1. Get the source
 
-- examples/
-  - blink.c
-  - uart.c
-  - pwm.c
-  - adc.c
-- libopencm3/
-- cmake/
-  - toolchain-arm-none-eabi.cmake
-- pyocd-packs/
-  - Puya.PY32.pack (pyOCD device pack)
-- build/ (recommended build directory)
-
-## Quick Start
-
-### Build everything in 3 steps
+`libopencm3` is a Git submodule, so include it when cloning:
 
 ```bash
-# 1) Build libopencm3 (one-time)
-cd libopencm3
-make TARGETS=py32/f0
-cd ..
-
-# 2) Create and enter build directory
-mkdir build
-cd build
-
-# 3) Configure and build all examples
-cmake -DCMAKE_TOOLCHAIN_FILE=../cmake/toolchain-arm-none-eabi.cmake ..
-cmake --build . -j
+git clone --recurse-submodules https://github.com/Cesarbautista10/py32f003_lib.git
+cd py32f003_lib
+git submodule status --recursive
 ```
 
-This creates `blink.elf`, `uart.elf`, `pwm.elf`, `adc.elf`, and all matching
-`.bin`/`.hex` files in `build/`.
+> [!IMPORTANT]
+> GitHub's **Download ZIP** does not include submodules. If you already cloned without `--recurse-submodules`, run `git submodule update --init --recursive` here. A leading `-` in `git submodule status` means a submodule is missing.
 
-### Flash firmware
-
-From the `build/` directory:
+## 2. Install the tools (Debian or Ubuntu)
 
 ```bash
-# Flash and reset blink
-cmake --build . --target flash_reset_blink -j
+sudo apt update
+sudo apt install -y git cmake make gcc-arm-none-eabi binutils-arm-none-eabi \
+  libnewlib-arm-none-eabi python3-venv libusb-1.0-0
 
-# Flash and reset uart
-cmake --build . --target flash_reset_uart -j
-
-# Flash and reset PWM or ADC
-cmake --build . --target flash_reset_pwm -j
-cmake --build . --target flash_reset_adc -j
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install pyocd pyserial
 ```
 
-## Example Selection
+Activate the environment again in each new terminal with `source .venv/bin/activate`. See [setup](docs/SETUP.md) for verification steps and other operating systems.
 
-Use `APP` in CMake:
+## 3. Build firmware
 
-- `-DAPP=blink`
-- `-DAPP=uart`
-- `-DAPP=pwm`
-- `-DAPP=adc`
-- `-DAPP=rgb_pa0` (WS2812-compatible RGB LEDs over I2C, data output on PA0)
-- `-DAPP=ws2812_pa0` (standalone WS2812-compatible RGB LED animation on PA0)
-- `-DAPP=all` (build all examples)
-
-The standalone Arduino master for `rgb_pa0` is in
-`examples/arduino_master/i2c_rgb/`. The workshop network master in
-`examples/arduino_master/i2c_network/` also discovers and controls NeoPixel PA0 nodes.
-
-## Recommended Build Flow (pico-sdk style)
-
-### 1) Build libopencm3 first
+Run these commands from the **root of this SDK**:
 
 ```bash
-cd libopencm3
-make TARGETS=py32/f0
-```
+# Build the library once.
+make -C libopencm3 TARGETS=py32/f0
 
-### 2) Configure and build
-
-#### Blink
-
-```bash
-cd ..
-cmake -S . -B build/blink -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-arm-none-eabi.cmake -DAPP=blink
-cmake --build build/blink -j
-```
-
-Artifacts are generated in `build/blink/`:
-
-- blink.elf
-- blink.bin
-- blink.hex
-
-#### UART
-
-```bash
-cmake -S . -B build/uart -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-arm-none-eabi.cmake -DAPP=uart
+# Configure and build UART in its own directory.
+cmake -S . -B build/uart \
+  -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-arm-none-eabi.cmake \
+  -DAPP=uart
 cmake --build build/uart -j
 ```
 
-Artifacts are generated in `build/uart/`:
+Look for `build/uart/uart.elf`, `build/uart/uart.bin`, and `build/uart/uart.hex`. To build Blink, replace `uart` with `blink` in the configure and build commands.
 
-- uart.elf
-- uart.bin
-- uart.hex
+> [!TIP]
+> The CMake option is `--build`. `cmake --hash build/uart -j` is a typo and produces `Unknown argument`; `cmake --build build/uart -j` compiles the configured project.
 
-#### Build all examples
+### Choose an example
+
+| `APP` value | Example |
+| --- | --- |
+| `blink` | LED blink |
+| `uart` | USART2 echo on PA0 (TX) and PA1 (RX), 115200 baud, with startup stabilization |
+| `pwm`, `pwm_pa2` | PWM demonstrations |
+| `adc` | ADC demonstration |
+| `i2c_pwm`, `i2c_on_off`, `i2c_adc` | I²C peripheral examples |
+| `rgb_pa0` | I²C-controlled WS2812-compatible RGB LEDs on PA0 |
+| `ws2812_pa0` | Standalone WS2812-compatible animation on PA0 |
+| `all` | All examples (the default) |
+
+For example, to build everything in a separate directory:
 
 ```bash
 cmake -S . -B build/all -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-arm-none-eabi.cmake -DAPP=all
 cmake --build build/all -j
 ```
 
-## Flash Targets
+The Arduino master for `rgb_pa0` is in `examples/arduino_master/i2c_rgb/`. The workshop's discovery and control master is in `examples/arduino_master/i2c_network/`.
 
-### Single-app build (`APP=blink`, `uart`, `pwm`, or `adc`)
+## 4. Flash a board
 
-Global aliases are available:
+Connect the SWD probe and verify that pyOCD detects it:
 
-- `flash`
-- `flash-reset`
+```bash
+pyocd list
+```
 
-Example:
+For a **single-example build** such as `build/uart`, flash and reset with:
 
 ```bash
 cmake --build build/uart --target flash-reset -j
 ```
 
-### Multi-app build (`APP=all`)
-
-Per-example targets are available:
-
-- `flash_blink`
-- `flash_uart`
-- `flash_pwm`
-- `flash_adc`
-- `flash_reset_blink`
-- `flash_reset_uart`
-- `flash_reset_pwm`
-- `flash_reset_adc`
-
-Example:
+For an **`APP=all` build**, select the example in the target name:
 
 ```bash
 cmake --build build/all --target flash_reset_uart -j
 ```
 
-## pyOCD Settings
+Use `flash` or `flash_uart` to program without a reset. CMake creates `<build-directory>/pyocd.yaml` on configuration; it points to the local `pyocd-packs/Puya.PY32.pack` for the `py32f003x4` target. You can override the target and config path with `PYOCD_TARGET` and `PYOCD_CONFIG` when configuring CMake. See [flashing](docs/FLASH.md) for manual pyOCD commands.
 
-Default values:
+## Project map
 
-- target: `py32f003x4`
-- config: `build/pyocd.yaml` (auto-generated, not committed)
+| Path | Purpose |
+| --- | --- |
+| `examples/` | Firmware examples and Arduino masters |
+| `libopencm3/` | Adapted library, included as a Git submodule |
+| `cmake/` | ARM toolchain configuration |
+| `pyocd-packs/` | Local device pack for pyOCD |
+| `docs/` | Setup, build, flash, hardware, and troubleshooting guides |
+| `build/` | Generated output, created when you configure CMake |
 
-The `pyocd.yaml` file is automatically created in the `build/` directory on first `cmake`. Do not edit it manually.
+## Need help?
 
-Override via CMake:
-
-```bash
-cmake -S . -B build/uart \
-  -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-arm-none-eabi.cmake \
-  -DAPP=uart \
-  -DPYOCD_TARGET=py32f003x4 \
-  -DPYOCD_CONFIG=build/uart/pyocd.yaml
-```
-
-## UART Example Details
-
-- UART: USART2
-- TX: PA0 (AF9)
-- RX: PA1 (AF9)
-- Baudrate: 115200
-- Behavior: echo incoming characters
-- Includes startup stabilization to reduce garbled text after reset
-
-## Troubleshooting
-
-### `build/... is not a directory`
-
-Configure first:
-
-```bash
-cmake -S . -B build/uart -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-arm-none-eabi.cmake -DAPP=uart
-```
-
-### Garbled UART text at startup
-
-- Verify terminal is 115200 8N1
-- Verify common GND between board and USB-UART adapter
-- Verify TX/RX are crossed correctly
-- As a test, reduce baudrate to 57600
+- **`build/... is not a directory`:** configure that build directory with `cmake -S . -B build/<app> ... -DAPP=<app>` before using `cmake --build`.
+- **Probe or device not detected:** check SWD wiring, power, the probe firmware, and `pyocd list`; see [hardware](docs/HARDWARE.md) and [troubleshooting](docs/TROUBLESHOOTING.md).
+- **Garbled UART output:** use 115200 8N1, connect a common ground, and cross TX/RX. Try 57600 as a diagnostic test.
