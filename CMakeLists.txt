@@ -2,10 +2,10 @@ cmake_minimum_required(VERSION 3.16)
 project(py32_sdk C ASM)
 
 set(DEVICE py32f003x4)
-set(APP all CACHE STRING "Example to build: blink, uart, pwm, pwm_pa2, adc, i2c_pwm, i2c_on_off, i2c_adc, rgb_pa0, ws2812_pa0, or all")
+set(APP all CACHE STRING "Example to build: blink, uart, reto_dump, pwm, pwm_pa2, adc, i2c_pwm, i2c_on_off, i2c_adc, rgb_pa0, ws2812_pa0, or all")
 set(OPENCM3_DIR ${CMAKE_SOURCE_DIR}/libopencm3)
 set(GENERATED_LD ${CMAKE_BINARY_DIR}/generated.${DEVICE}.ld)
-set(VALID_APPS blink uart pwm pwm_pa2 adc i2c_pwm i2c_on_off i2c_adc rgb_pa0 ws2812_pa0)
+set(VALID_APPS blink uart reto_dump pwm pwm_pa2 adc i2c_pwm i2c_on_off i2c_adc rgb_pa0 ws2812_pa0)
 set(RGB_PA0_PIXEL_COUNT 80 CACHE STRING "Number of WS2812-compatible LEDs driven by rgb_pa0")
 option(RGB_PA0_I2C_USE_PF0_PF1 "Use PF0/PF1 instead of PA10/PB6 for rgb_pa0 I2C" OFF)
 set(WS2812_PA0_LED_COUNT 80 CACHE STRING "Number of LEDs in the standalone PA0 demo")
@@ -97,6 +97,14 @@ function(add_py32_example EXAMPLE_NAME)
         COMMAND ${CMAKE_SIZE} $<TARGET_FILE:${EXAMPLE_NAME}.elf>
         COMMENT "Creating ${EXAMPLE_NAME}.bin / ${EXAMPLE_NAME}.hex in ${OUTPUT_DIR}"
     )
+
+    if(EXAMPLE_NAME STREQUAL "reto_dump")
+        add_custom_command(TARGET ${EXAMPLE_NAME}.elf POST_BUILD
+            COMMAND ${CMAKE_OBJCOPY} -Obinary --gap-fill=0xff --pad-to=0x08004000
+                    $<TARGET_FILE:${EXAMPLE_NAME}.elf> ${OUTPUT_DIR}/${EXAMPLE_NAME}-full.bin
+            COMMENT "Creating 16 KiB offline-practice image ${EXAMPLE_NAME}-full.bin"
+        )
+    endif()
 
     add_custom_target(flash_${EXAMPLE_NAME}
         COMMAND pyocd flash -t ${PYOCD_TARGET} --config ${PYOCD_CONFIG} ${OUTPUT_DIR}/${EXAMPLE_NAME}.hex

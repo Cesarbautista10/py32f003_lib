@@ -73,6 +73,7 @@ Look for `build/uart/uart.elf`, `build/uart/uart.bin`, and `build/uart/uart.hex`
 | --- | --- |
 | `blink` | LED blink |
 | `uart` | USART2 echo on PA0 (TX) and PA1 (RX), 115200 baud, with startup stabilization |
+| `reto_dump` | BugCON UART challenge for firmware extraction and disassembly practice |
 | `pwm`, `pwm_pa2` | PWM demonstrations |
 | `adc` | ADC demonstration |
 | `i2c_pwm`, `i2c_on_off`, `i2c_adc` | I²C peripheral examples |
